@@ -1,7 +1,7 @@
 # UMP‑Gateway 
 
 **Version 0.1**  
-Author: <your‑name>
+Author: Hammad Tariq
 
 ---
 
@@ -39,9 +39,8 @@ flowchart LR
     C[Client / Agent]
     C -->|Bearer JWT| GW(UMP Gateway)
   end
-  GW -->|HTTP
-         (X-UMP-*)| E[LLM Engine]
-  GW -.->|async mirror| M[Memory Stub (Weaviate)]
+  GW -->|HTTP<br/>(X-UMP-*)| E[LLM Engine]
+  GW -.->|async mirror| M[Memory Stub (Weaviate)]
 ```
 
 ### Gateway pipeline
@@ -64,7 +63,7 @@ flowchart LR
 | `mem/` | Async writer to Weaviate REST | `weaviate‑client` |
 
 ## 4.1 Default engine target (Ollama)
-* **Local dev:** `ENGINE_URL=http://ollama:11434` — locks down a laptop’s Ollama instance with OIDC JWT SSO in under a minute.
+* **Local dev:** `ENGINE_URL=http://ollama:11434` — locks down a laptop's Ollama instance with OIDC JWT SSO in under a minute.
 * **Prod swap:** repoint `ENGINE_URL` to `http://vllm:8000`, `https://api.openai.com`, etc.; no code change required.
 
 ## 4.2 Auth works independently
