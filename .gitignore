@@ -6,3 +6,4 @@ __pycache__/
 __pyo3*.so
 .env
 .cursorrules
+token.txt
