@@ -39,8 +39,9 @@ flowchart LR
     C[Client / Agent]
     C -->|Bearer JWT| GW(UMP Gateway)
   end
-  GW -->|HTTP<br/>(X-UMP-*)| E[LLM Engine]
-  GW -.->|async mirror| M[Memory Stub (Weaviate)]
+  GW -->|HTTP| E[LLM Engine]
+  GW -->|"X-UMP-\*"| E
+  GW -.->|async mirror| M["Memory Stub (Weaviate)"]
 ```
 
 ### Gateway pipeline
