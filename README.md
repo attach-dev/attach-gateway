@@ -59,16 +59,16 @@ flowchart TD
     %%  COMPONENTS
     %%────────────────────────────────
     subgraph Front-end
-        UI["Browser\n demo.html"]
+        UI["Browser<br/> demo.html"]
     end
 
     subgraph Gateway
-        GW["UMP-Gateway\n(OIDC SSO + A2A)"]
+        GW["UMP-Gateway<br/> (OIDC SSO + A2A)"]
     end
 
     subgraph Agents
-        PL["Planner Agent\nFastAPI :8100"]
-        CD["Coder Agent\nFastAPI :8101"]
+        PL["Planner Agent<br/>FastAPI :8100"]
+        CD["Coder Agent<br/>FastAPI :8101"]
     end
 
     subgraph Memory
@@ -76,7 +76,7 @@ flowchart TD
     end
 
     subgraph Engine
-        OL["Ollama / vLLM\n:11434"]
+        OL["Ollama / vLLM<br/>:11434"]
     end
 
     %%────────────────────────────────
@@ -85,7 +85,7 @@ flowchart TD
     UI -- ① POST /a2a/tasks/send<br/>Bearer JWT, prompt --> GW
 
     %%─ Planner hop
-    GW -- ② Proxy → planner\n(X-UMP-User, Session) --> PL
+    GW -- ② Proxy → planner<br/>(X-UMP-User, Session) --> PL
     PL -- ③ Write “plan” doc --> WV
     PL -- ④ /a2a/tasks/send\nbody:{mem_id} --> GW
 
