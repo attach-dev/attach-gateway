@@ -1,0 +1,48 @@
+<textarea id="p" rows="3" cols="60">Write python to reverse a list</textarea>
+<button onclick="go()">Ask</button>
+<pre id="o"></pre>
+<script>
+const GW = "http://localhost:8080";                 // ← gateway origin
+const jwt = localStorage.getItem("jwt");            // read once
+
+async function go () {
+  if (!jwt) { alert("localStorage.jwt is missing"); return; }
+
+  const body = {
+    input: {
+      model: "tinyllama",
+      messages: [{ role: "user", content: p.value }],
+      stream: false
+    }
+  };
+
+  /* 1) queue task */
+  const send = await fetch(`${GW}/a2a/tasks/send`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${jwt}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+  if (!send.ok) { o.textContent = await send.text(); return; }
+  const { task_id } = await send.json();
+
+  /* 2) poll until done */
+  let st;
+  do {
+    await new Promise(r => setTimeout(r, 800));
+    const r = await fetch(`${GW}/a2a/tasks/status/${task_id}`, {
+      headers: { "Authorization": `Bearer ${jwt}` }
+    });
+    st = await r.json();
+  } while (st.state !== "done" && st.state !== "error");
+
+  /* 3) output */
+  if (st.state === "done") {
+    o.textContent = st.result.choices[0].message.content;
+  } else {
+    o.textContent = "Upstream error: " + JSON.stringify(st.result);
+  }
+}
+</script>
