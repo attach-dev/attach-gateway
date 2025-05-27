@@ -1,4 +1,4 @@
-# UMP‑Gateway
+# Attach Gateway
 
 > **Identity & Memory side‑car** for every LLM engine and multi‑agent framework. Add OIDC / DID SSO, A2A hand‑off, and a pluggable memory bus (Weaviate today) – all with one process.
 
@@ -8,7 +8,7 @@
 
 LLM engines such as **Ollama** or **vLLM** ship with **zero auth**.  Agent‑to‑agent protocols (Google **A2A**, MCP, OpenHands) assume a *Bearer token* is already present but don’t tell you how to issue or validate it.  Teams end up wiring ad‑hoc reverse proxies, leaking ports, and copy‑pasting JWT code.
 
-**UMP‑Gateway** is that missing resource‑server:
+**Attach Gateway** is that missing resource‑server:
 
 *   ✅ Verifies **OIDC / JWT** or **DID‑JWT**
 *   ✅ Stamps `X‑UMP‑User` + `X‑UMP‑Session` headers so every downstream agent/tool sees the same identity
@@ -24,7 +24,7 @@ Run it next to any model server and get secure, shareable context in under 1 mi
 ```bash
 # 0) prerequisites: Python 3.12, Ollama installed, Auth0 account or DID token
 
-git clone https://github.com/<you>/ump-gateway.git && cd ump-gateway
+git clone https://github.com/attach-dev/attach-gateway.git && cd attach-gateway
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt weaviate-client[embedded]
 
@@ -63,7 +63,7 @@ flowchart TD
     end
 
     subgraph Gateway
-        GW["UMP-Gateway<br/> (OIDC SSO + A2A)"]
+        GW["Attach Gateway<br/> (OIDC SSO + A2A)"]
     end
 
     subgraph Agents
@@ -159,4 +159,3 @@ Type a request like *“Write Python to sort a list.”*  The browser shows:
 ## License
 
 MIT
-
