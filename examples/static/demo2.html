@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>UMP Gateway Demo</title>
+<style>
+ body{margin:0;font:14px/1.4 system-ui;background:#d9d9d9}
+ #wrap{padding:20px}
+ h1{margin:0 auto 10px;width:640px;text-align:center;border:1px solid #fff;
+    background:#fff;border-radius:8px;font-weight:600}
+ .col{float:left;width:48%;margin-right:2%;background:#fff;
+      border-radius:8px;min-height:520px;padding:10px;box-sizing:border-box}
+ .col:last-child{margin-right:0}
+ .msg{white-space:pre-wrap;font-family:monospace;margin:4px 0}
+ .user{color:#333}
+ .bot{color:#006dcc}
+ #sys{background:#fff;border-radius:8px;height:120px;overflow:auto;padding:6px}
+ .send{display:flex;margin-top:6px}
+ textarea{flex:1;font:14px monospace;height:42px}
+ button{width:38px;border:none;background:#006dcc;color:#fff;border-radius:4px}
+ #signin{margin-bottom:10px;padding:6px 14px;background:#006dcc;color:#fff;
+         border:none;border-radius:6px;font-weight:600;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>UMP Gateway Demo</h1>
+
+  <button id="signin">Sign in with UMP.dev</button>
+
+  <div id="planner"  class="col"><h3>Planner Agent</h3></div>
+  <div id="coder"    class="col"><h3>Coder Agent</h3></div>
+
+  <div style="clear:both"></div>
+
+  <div class="send">
+    <textarea id="p_input" placeholder="Ask the Planner…"></textarea>
+    <button onclick="sendPlanner()">➤</button>
+  </div>
+
+  <div class="send">
+    <textarea id="c_input" placeholder="(Optional) Talk to Coder directly…"></textarea>
+    <button onclick="sendCoder()">➤</button>
+  </div>
+
+  <h3>System/Memory Logs</h3>
+  <div id="sys"></div>
+</div>
+
+<script>
+const GW = location.protocol + '//' + location.hostname + ':8080'; // gateway URL
+let jwt = localStorage.jwt || null;
+
+/* ---------- Auth0 login popup ---------- */
+document.getElementById('signin').onclick = async () => {
+  // Fetch public credentials from gateway
+  const config = await fetch(`${GW}/auth/config`).then(r => r.json());
+  
+  const auth0 = new URL(`https://${config.domain}/authorize`);
+  auth0.search = new URLSearchParams({
+     response_type: 'token',
+     client_id: config.client_id,
+     redirect_uri: location.href,
+     audience: config.audience,
+     scope: 'openid'
+  });
+  window.location = auth0.toString();
+};
+
+/* ---------- parse hash after login ---------- */
+if (location.hash.startsWith('#access_token=')) {
+  jwt = new URLSearchParams(location.hash.slice(1)).get('access_token');
+  localStorage.jwt = jwt;
+  location.hash = ''; // clean up
+}
+
+/* ---------- helpers ---------- */
+function append(id, cls, text){
+  const d=document.createElement('div');
+  d.className='msg '+cls; d.textContent=text;
+  document.getElementById(id).appendChild(d);
+  d.scrollIntoView({block:'end'});
+}
+async function postA2A(url, body){
+  const r = await fetch(url, {
+      method:'POST',
+      headers:{'Authorization':'Bearer '+jwt,'Content-Type':'application/json'},
+      body:JSON.stringify(body)});
+  return r.json();
+}
+async function poll(task){
+  let st;
+  while(true){
+    const r=await fetch(`${GW}/a2a/tasks/status/${task}`,{
+      headers:{'Authorization':'Bearer '+jwt}});
+    st = await r.json();
+    if(st.state==='done') return st.result;
+    await new Promise(res=>setTimeout(res,500));
+  }
+}
+/* ---------- senders ---------- */
+async function sendPlanner(){
+  const txt=document.getElementById('p_input').value; if(!txt) return;
+  append('planner','user','🗣 '+txt);
+  document.getElementById('p_input').value='';
+  const {task_id}=await postA2A(`${GW}/a2a/tasks/send`,{
+       input:{messages:[{role:'user',content:txt}],stream:false},
+       target_url:'http://127.0.0.1:8100/a2a/handle'});
+  const res=await poll(task_id);
+  append('coder','bot','🤖 '+res);
+}
+async function sendCoder(){
+  const txt=document.getElementById('c_input').value; if(!txt) return;
+  append('coder','user','🗣 '+txt);
+  document.getElementById('c_input').value='';
+  const {task_id}=await postA2A(`${GW}/a2a/tasks/send`,{
+       input:{messages:[{role:'user',content:txt}],stream:false},
+       target_url:'http://127.0.0.1:8101/a2a/handle'});
+  const res=await poll(task_id);
+  append('coder','bot','🤖 '+res);
+}
+
+/* ---------- live gateway log stream (Server-Sent Events) ---------- */
+const sse = new EventSource(`${GW}/logs/stream`);      // optional SSE route
+sse.onmessage = ev => { append('sys','',ev.data); };
+</script>
+</body>
+</html>

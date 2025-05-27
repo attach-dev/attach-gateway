@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from proxy.engine import proxy_to_engine
 from a2a.routes import router as a2a_router
+import os
 
 from middleware.auth import jwt_auth_mw         # ← your auth middleware
 from middleware.session import session_mw       # ← generates session-id header
@@ -29,3 +30,11 @@ app.add_middleware(
 # catch-all proxy (incl. /api/chat)
 app.add_api_route("/{path:path}", proxy_to_engine,
                   methods=["GET", "POST", "PUT", "PATCH"])
+
+@app.get("/auth/config")
+async def auth_config():
+    return {
+        "domain": os.getenv("AUTH0_DOMAIN"),
+        "client_id": os.getenv("AUTH0_CLIENT"),
+        "audience": os.getenv("OIDC_AUD")
+    }
