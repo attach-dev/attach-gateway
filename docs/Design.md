@@ -1,4 +1,4 @@
-# UMP‑Gateway 
+# Attach‑Gateway 
 
 **Version 0.1**  
 Author: Hammad Tariq
@@ -37,17 +37,17 @@ Goal: one drop‑in side‑car that gives **OIDC‑backed SSO** *and* a **sessio
 flowchart LR
   subgraph Edge
     C[Client / Agent]
-    C -->|Bearer JWT| GW(UMP Gateway)
+    C -->|Bearer JWT| GW(Attach Gateway)
   end
   GW -->|HTTP| E[LLM Engine]
-  GW -->|"X-UMP-\*"| E
+  GW -->|"X-Attach-\*"| E
   GW -.->|async mirror| M["Memory Stub (Weaviate)"]
 ```
 
 ### Gateway pipeline
 1. **Auth** – verify JWT (OIDC) / HMAC.
 2. **Session** – `session_id = sha256(user.sub + user‑agent)`
-3. **Headers out** – `X-UMP-User`, `X-UMP-Session`, `X-UMP-Agent?`.
+3. **Headers out** – `X-Attach-User`, `X-Attach-Session`, `X-Attach-Agent?`.
 4. **Mirror** – non‑blocking stream → memory stub.
 5. **Proxy** – reverse‑proxy to target engine.
 
@@ -84,8 +84,8 @@ flowchart LR
 ### 5.2 Headers added
 
 ```
-X-UMP-User:    <sub>
-X-UMP-Session: <uuid>
+X-Attach-User:    <sub>
+X-Attach-Session: <uuid>
 
 ### 5.3 Example curl against Ollama through gateway
 ```bash
@@ -96,7 +96,7 @@ export OLLAMA_TOKEN=$(./scripts/dev_login.sh)
 curl -H "Authorization: Bearer $OLLAMA_TOKEN" \
      -d '{"prompt":"Hello"}' \
      http://localhost:8080/api/chat
-# Gateway ➜ validates JWT ➜ stamps X‑UMP‑User/Session ➜ proxies to Ollama :11434
+# Gateway ➜ validates JWT ➜ stamps X‑Attach‑User/Session ➜ proxies to Ollama :11434
 ```
 
 ---
@@ -112,7 +112,7 @@ curl -H "Authorization: Bearer $OLLAMA_TOKEN" \
 
 ## 7  Future work
 
-1. Swap Weaviate for **UMP Store v1** (Git‑like, policy guards).
+1. Swap Weaviate for **Attach Store v1** (Git‑like, policy guards).
 2. Add **DID‑JWT** verifier module.
 3. Rate‑limit & billing hooks.
 4. Helm chart & K8s side‑car injector.
@@ -123,7 +123,7 @@ curl -H "Authorization: Bearer $OLLAMA_TOKEN" \
 
 1. Use separate header for **Agent‑token** or nested JWT?
 2. Include streaming metrics in mirror payload now or later?
-3. Naming: `ump-gateway` vs `a2a-auth-gw`?
+3. Naming: `attach-gateway` vs `a2a-auth-gw`?
 
 
 ---

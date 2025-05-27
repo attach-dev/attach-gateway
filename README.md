@@ -11,7 +11,7 @@ LLM engines such as **Ollama** or **vLLM** ship with **zero auth**.  Agent‑to�
 **Attach Gateway** is that missing resource‑server:
 
 *   ✅ Verifies **OIDC / JWT** or **DID‑JWT**
-*   ✅ Stamps `X‑UMP‑User` + `X‑UMP‑Session` headers so every downstream agent/tool sees the same identity
+*   ✅ Stamps `X‑ATTACH‑User` + `X‑ATTACH‑Session` headers so every downstream agent/tool sees the same identity
 *   ✅ Implements `/a2a/tasks/send` + `/tasks/status` for Google A2A & OpenHands hand‑off
 *   ✅ Mirrors prompts & responses to a memory backend (Weaviate embedded by default)
 
@@ -47,7 +47,7 @@ curl -H "Authorization: Bearer $JWT" \
      http://localhost:8080/api/chat | jq .
 ```
 
-You should see a JSON response plus `X‑UMP‑Session‑Id` header – proof the pipeline works.
+You should see a JSON response plus `X‑ATTACH‑Session‑Id` header – proof the pipeline works.
 
 ---
 
@@ -85,7 +85,7 @@ flowchart TD
     UI -- ① POST /a2a/tasks/send<br/>Bearer JWT, prompt --> GW
 
     %%─ Planner hop
-    GW -- ② Proxy → planner<br/>(X-UMP-User, Session) --> PL
+    GW -- ② Proxy → planner<br/>(X-Attach-User, Session) --> PL
     PL -- ③ Write “plan” doc --> WV
     PL -- ④ /a2a/tasks/send\nbody:{mem_id} --> GW
 
@@ -105,8 +105,8 @@ flowchart TD
 | Header | Meaning |
 |--------|---------|
 | `Authorization: Bearer <JWT>` | OIDC or DID token proved by gateway |
-| `X‑UMP‑User` | stable user ID (`auth0|123` or `did:pkh:…`) |
-| `X‑UMP‑Session` | deterministic hash (user + UA) for request trace |
+| `X‑Attach‑User` | stable user ID (`auth0|123` or `did:pkh:…`) |
+| `X‑Attach‑Session` | deterministic hash (user + UA) for request trace |
 
 ---
 
@@ -152,7 +152,7 @@ Type a request like *“Write Python to sort a list.”*  The browser shows:
 
 * **v0.2** — DID‑JWT resolver, protected‑resource metadata endpoint (OAuth 2.1).  
 * **v0.3** — Token‑exchange (RFC 8693) for on‑behalf‑of delegation.  
-* **v0.4** — UMP Store v1 (Git‑style, policy guards).
+* **v0.4** — Attach Store v1 (Git‑style, policy guards).
 
 ---
 

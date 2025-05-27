@@ -17,7 +17,7 @@ middlewares = [
     Middleware(BaseHTTPMiddleware, dispatch=session_mw),
 ]
 
-app = FastAPI(title="ump-gateway", middleware=middlewares)
+app = FastAPI(title="attach-gateway", middleware=middlewares)
 app.include_router(a2a_router, prefix="/a2a")
 app.add_middleware(
     CORSMiddleware,

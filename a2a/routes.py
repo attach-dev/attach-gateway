@@ -75,7 +75,7 @@ async def tasks_send(req: Request, bg: BackgroundTasks):
     # Forward only non-None headers; JWT is mandatory, session optional
     base_headers = {
         "Authorization": req.headers.get("authorization"),
-        "X-UMP-Session": req.headers.get("x-ump-session"),
+        "X-Attach-Session": req.headers.get("x-attach-session"),
     }
     headers = {k: v for k, v in base_headers.items() if v is not None}
 

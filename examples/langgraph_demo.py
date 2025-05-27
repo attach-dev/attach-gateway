@@ -1,6 +1,6 @@
 from __future__ import annotations
 """
-LangGraph → UMP-Gateway demo
+LangGraph → Attach-Gateway demo
 ────────────────────────────
 Queues an Ollama chat via /a2a/tasks/send, polls the status endpoint, and
 prints the assistant reply.
@@ -22,7 +22,7 @@ GW_URL = os.getenv("GW_URL", "http://127.0.0.1:8080")
 SID    = hashlib.sha256((JWT + "demo").encode()).hexdigest()[:16]
 
 HEADERS             = {"Authorization": f"Bearer {JWT}"}
-HEADERS_WITH_SESSION = HEADERS | {"X-UMP-Session": SID}
+HEADERS_WITH_SESSION = HEADERS | {"X-Attach-Session": SID}
 
 # ─────────────── Helpers: queue + poll Ollama ──────────────
 def lc_to_openai(msg: BaseMessage) -> dict:
