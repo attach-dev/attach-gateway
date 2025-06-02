@@ -139,7 +139,7 @@ Type a request like *“Write Python to sort a list.”*  The browser shows:
 
 | Path | Purpose |
 |------|---------|
-| `auth/` | OIDC & (soon) DID‑JWT verifiers |
+| `auth/` | OIDC & DID‑JWT verifiers |
 | `middleware/` | JWT middleware, session header, mirror trigger |
 | `a2a/` | `/tasks/send` & `/tasks/status` routes |
 | `mem/` | pluggable memory writers (`weaviate.py`, `null.py`) |
@@ -147,6 +147,15 @@ Type a request like *“Write Python to sort a list.”*  The browser shows:
 | `examples/static/` | `demo.html` chat page |
 
 ---
+
+### Auth core
+
+`auth.verify_jwt()` accepts three token formats and routes them automatically:
+
+1. Standard OIDC JWTs
+2. `did:key` tokens
+3. `did:pkh` tokens
+
 
 ## Roadmap
 
