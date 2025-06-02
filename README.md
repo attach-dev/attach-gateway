@@ -156,6 +156,11 @@ Type a request like *“Write Python to sort a list.”*  The browser shows:
 2. `did:key` tokens
 3. `did:pkh` tokens
 
+Example DID-JWT request:
+```bash
+curl -X POST /v1/resource \
+     -H "Authorization: Bearer did:key:z6Mki...<sig>.<payload>.<sig>"
+```
 
 ## Roadmap
 
