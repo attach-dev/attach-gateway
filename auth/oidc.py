@@ -20,7 +20,7 @@ def _require_env(var: str) -> str:
     """Abort startup if a mandatory env-var is missing."""
     val = os.getenv(var)
     if not val:
-        raise RuntimeError(f"{var} must be set (see .cursorrules)")
+        raise RuntimeError(f"{var} must be set (see README for setup)")
     return val
 
 
@@ -59,8 +59,8 @@ def verify_jwt(token: str, *, leeway: int = 60) -> dict[str, Any]:
     """
     Validate a client-supplied JWT.
 
-    • Accept only RS256 / ES256.  
-    • Enforce `aud` and `exp` with configurable leeway.  
+    • Accept only RS256 / ES256.
+    • Enforce `aud` and `exp` with configurable leeway.
     • If `kid` is unknown, refresh JWKS once before failing.
 
     Returns:
@@ -95,7 +95,7 @@ def verify_jwt(token: str, *, leeway: int = 60) -> dict[str, Any]:
 
     return jwt.decode(
         token,
-        key_cfg,               # jose selects RSA/ECDSA key automatically
+        key_cfg,  # jose selects RSA/ECDSA key automatically
         algorithms=[alg],
         audience=audience,
         issuer=issuer,
