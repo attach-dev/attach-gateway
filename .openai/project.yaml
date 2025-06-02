@@ -1,0 +1,17 @@
+# .openai/project.yaml
+name: attach-gateway
+language: python
+python_version: "3.12"
+
+setup_commands:
+  - ["pip", "install", "-r", "requirements.txt"]
+  - ["pip", "install", "weaviate-client[embedded]", "httpx", "pytest-asyncio"]
+  - ["python", "scripts/start_weaviate.py", "--port", "6666", "&"]
+
+env:
+  WEAVIATE_URL: "http://127.0.0.1:6666"
+  OIDC_ISSUER:  "https://dummy.example"
+  OIDC_AUD:     "attach-local"
+
+test_command: ["pytest", "-q"]
+lint_command: ["pre-commit", "run", "--all-files"]
