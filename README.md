@@ -29,7 +29,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt weaviate-client[embedded]
 
 # 1) start embedded memory (background tab)
-python scripts/start_weaviate.py &
+python script/start_weaviate.py &
 
 # 2) export your short‑lived token
 export JWT="<paste Auth0 or DID token>"
@@ -114,7 +114,7 @@ flowchart TD
 
 ```bash
 # pane 1 – memory
-python scripts/start_weaviate.py
+python script/start_weaviate.py
 
 # pane 2 – gateway
 uvicorn main:app --port 8080
