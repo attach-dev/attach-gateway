@@ -48,7 +48,7 @@ flowchart LR
 1. **Auth** – verify JWT (OIDC) / HMAC.
 2. **Session** – `session_id = sha256(user.sub + user‑agent)`
 3. **Headers out** – `X-Attach-User`, `X-Attach-Session`, `X-Attach-Agent?`.
-4. **Mirror** – non‑blocking stream → memory stub.
+4. **Mirror** – non‑blocking stream → memory stub (also accepts `/v1/logs`).
 5. **Proxy** – reverse‑proxy to target engine.
 
 ---

@@ -162,6 +162,18 @@ curl -X POST /v1/resource \
      -H "Authorization: Bearer did:key:z6Mki...<sig>.<payload>.<sig>"
 ```
 
+## 💾 Memory: logs
+
+Send Sakana-formatted logs to the gateway and they will be stored as
+`MemoryEvent` objects in Weaviate.
+
+```bash
+curl -X POST /v1/logs \
+     -H "Authorization: Bearer $JWT" \
+     -d '{"run_id":"abc","level":"info","message":"hi"}'
+# => HTTP/1.1 202 Accepted
+```
+
 ## Roadmap
 
 * **v0.2** — DID‑JWT resolver, protected‑resource metadata endpoint (OAuth 2.1).  
