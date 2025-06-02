@@ -47,7 +47,7 @@ curl -H "Authorization: Bearer $JWT" \
      http://localhost:8080/api/chat | jq .
 ```
 
-You should see a JSON response plus `X‑ATTACH‑Session‑Id` header – proof the pipeline works.
+You should see a JSON response plus `X‑Attach‑Session` header – proof the pipeline works.
 
 ---
 
