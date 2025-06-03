@@ -14,6 +14,7 @@ LLM engines such as **Ollama** or **vLLM** ship with **zero auth**.  Agent‑to�
 *   ✅ Stamps `X‑ATTACH‑User` + `X‑ATTACH‑Session` headers so every downstream agent/tool sees the same identity
 *   ✅ Implements `/a2a/tasks/send` + `/tasks/status` for Google A2A & OpenHands hand‑off
 *   ✅ Mirrors prompts & responses to a memory backend (Weaviate embedded by default)
+*   ✅ Workflow traces (Temporal)
 
 Run it next to any model server and get secure, shareable context in under 1 minute.
 
@@ -44,7 +45,15 @@ uvicorn main:app --port 8080 &
 # 4) make a protected Ollama call via the gateway
 curl -H "Authorization: Bearer $JWT" \
      -d '{"model":"tinyllama","prompt":"hello"}' \
-     http://localhost:8080/api/chat | jq .
+    http://localhost:8080/api/chat | jq .
+```
+
+In another terminal, try the Temporal demo:
+
+```bash
+pip install temporalio  # optional workflow engine
+python examples/temporal_adapter/worker.py &
+python examples/temporal_adapter/client.py
 ```
 
 You should see a JSON response plus `X‑ATTACH‑Session‑Id` header – proof the pipeline works.
