@@ -95,8 +95,15 @@ export OLLAMA_TOKEN=$(./scripts/dev_login.sh)
 # Make a protected request via the gateway (8080)
 curl -H "Authorization: Bearer $OLLAMA_TOKEN" \
      -d '{"prompt":"Hello"}' \
-     http://localhost:8080/api/chat
+    http://localhost:8080/api/chat
 # Gateway ➜ validates JWT ➜ stamps X‑Attach‑User/Session ➜ proxies to Ollama :11434
+```
+
+### 5.4 Task queue schemes
+
+```
+http://<service>         # default HTTP call
+temporal://<Workflow>    # execute Temporal workflow
 ```
 
 ---
