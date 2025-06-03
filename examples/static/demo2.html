@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8" />
-<title>UMP Gateway Demo</title>
+<title>Attach Gateway Demo</title>
 <style>
  body{margin:0;font:14px/1.4 system-ui;background:#d9d9d9}
  #wrap{padding:20px}
@@ -18,15 +18,16 @@
  .send{display:flex;margin-top:6px}
  textarea{flex:1;font:14px monospace;height:42px}
  button{width:38px;border:none;background:#006dcc;color:#fff;border-radius:4px}
- #signin{margin-bottom:10px;padding:6px 14px;background:#006dcc;color:#fff;
+ #signin,#signout{margin-bottom:10px;padding:6px 14px;background:#006dcc;color:#fff;
          border:none;border-radius:6px;font-weight:600;cursor:pointer}
+ #signout{margin-left:6px}
 </style>
 </head>
 <body>
 <div id="wrap">
-  <h1>UMP Gateway Demo</h1>
+  <h1>Attach Gateway Demo</h1>
 
-  <button id="signin">Sign in with UMP.dev</button>
+  <button id="signin">Sign in with Attach.dev</button><button id="signout">Sign out</button>
 
   <div id="planner"  class="col"><h3>Planner Agent</h3></div>
   <div id="coder"    class="col"><h3>Coder Agent</h3></div>
@@ -48,6 +49,8 @@
 </div>
 
 <script>
+const PLANNER_URL = 'http://127.0.0.1:8100/a2a/handle';
+const CODER_URL   = 'http://127.0.0.1:8101/a2a/handle';
 const GW = location.protocol + '//' + location.hostname + ':8080'; // gateway URL
 let jwt = localStorage.jwt || null;
 
@@ -67,12 +70,18 @@ document.getElementById('signin').onclick = async () => {
   window.location = auth0.toString();
 };
 
+document.getElementById('signout').onclick = () => {
+  localStorage.removeItem('jwt');
+  location.reload();
+};
+
 /* ---------- parse hash after login ---------- */
 if (location.hash.startsWith('#access_token=')) {
   jwt = new URLSearchParams(location.hash.slice(1)).get('access_token');
   localStorage.jwt = jwt;
   location.hash = ''; // clean up
 }
+if (!jwt) document.getElementById('signout').style.display = 'none';
 
 /* ---------- helpers ---------- */
 function append(id, cls, text){
@@ -105,7 +114,7 @@ async function sendPlanner(){
   document.getElementById('p_input').value='';
   const {task_id}=await postA2A(`${GW}/a2a/tasks/send`,{
        input:{messages:[{role:'user',content:txt}],stream:false},
-       target_url:'http://127.0.0.1:8100/a2a/handle'});
+       target_url:PLANNER_URL});
   const res=await poll(task_id);
   append('coder','bot','🤖 '+res);
 }
@@ -115,14 +124,28 @@ async function sendCoder(){
   document.getElementById('c_input').value='';
   const {task_id}=await postA2A(`${GW}/a2a/tasks/send`,{
        input:{messages:[{role:'user',content:txt}],stream:false},
-       target_url:'http://127.0.0.1:8101/a2a/handle'});
+       target_url:CODER_URL});
   const res=await poll(task_id);
   append('coder','bot','🤖 '+res);
 }
 
 /* ---------- live gateway log stream (Server-Sent Events) ---------- */
-const sse = new EventSource(`${GW}/logs/stream`);      // optional SSE route
-sse.onmessage = ev => { append('sys','',ev.data); };
+try {
+  const sse = new EventSource(`${GW}/logs/stream`); // optional SSE route
+  let firstError = true;
+  sse.onmessage = ev => {
+    append('sys', '', ev.data);
+  };
+  sse.onerror = () => {
+    if (firstError) {
+      document.getElementById('sys').style.display = 'none';
+      firstError = false;
+    }
+    sse.close();
+  };
+} catch (e) {
+  document.getElementById('sys').style.display = 'none';
+}
 </script>
 </body>
 </html>
