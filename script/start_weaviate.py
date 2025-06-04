@@ -1,48 +1,36 @@
-#!/usr/bin/env python
-"""
-Start an **embedded Weaviate v4** instance for local dev.
+import weaviate
+import time
 
-Usage
------
-python script/start_weaviate.py [--port 6666]
+print("Starting Weaviate...")
+client = weaviate.connect_to_embedded(
+    version="1.29.8",
+    hostname="localhost",
+    port=6666,
+    grpc_port=6667,
+    environment_variables={
+        "WEAVIATE_DISABLE_CLUSTER": "true",
+        "WEAVIATE_CLUSTER_ENABLED": "false",
+        "WEAVIATE_CLUSTER_HOSTNAME": "localhost",
+        "WEAVIATE_CLUSTER_JOIN": "",
+        "WEAVIATE_CLUSTER_BIND_PORT": "0",
+        "WEAVIATE_CLUSTER_GOSSIP_BIND_PORT": "0",
+        "QUOTA_MAX_DISK_USAGE_PERCENT": "95",
+        "WEAVIATE_DISABLE_TELEMETRY": "true",
+        "WEAVIATE_DISABLE_GRAPHQL": "false",
+        "WEAVIATE_DISABLE_REST": "false",
+        "WEAVIATE_DISABLE_GRPC": "true",
+        "ENABLE_MODULES": "",
+        "BACKUP_FILESYSTEM_PATH": "/tmp/backups"
+    },
+    startup_period=30
+)
 
-• Boots the embedded DB in‑process and blocks forever.
-• Creates a `MemoryEvent` collection if it does not exist.
-"""
+print(f"✅ Weaviate is running at {client.url}")
 
-import argparse, time
-from weaviate import WeaviateClient
-from weaviate.embedded import EmbeddedOptions
-from weaviate.exceptions import WeaviateBaseError
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Start embedded Weaviate")
-    parser.add_argument("--port", type=int, default=6666, help="HTTP port (default 6666)")
-    args = parser.parse_args()
-
-    client = WeaviateClient(
-        embedded_options=EmbeddedOptions(
-            port=args.port,
-            hostname="127.0.0.1",           # ← new
-            persistence_data_path=".weaviate",
-        )
-    )
-
-    try:
-        if "MemoryEvent" not in client.collections.list().keys():
-            client.collections.create(name="MemoryEvent")
-            print("Created collection MemoryEvent")
-    except WeaviateBaseError as exc:
-        print(f"⚠️  Could not create collection: {exc}")
-
-    print(f"✅ Embedded Weaviate ready on http://localhost:{args.port}")
-
-    # Block process forever so the container/lonely process stays alive
-    try:
-        while True:
-            time.sleep(3600)
-    finally:
-        client.close()
-
-if __name__ == "__main__":
-    main()
+try:
+    while True:
+        time.sleep(3600)
+except KeyboardInterrupt:
+    print("\nShutting down Weaviate...")
+finally:
+    client.close()
