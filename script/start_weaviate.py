@@ -21,8 +21,7 @@ client = weaviate.connect_to_embedded(
         "WEAVIATE_DISABLE_GRPC": "true",
         "ENABLE_MODULES": "",
         "BACKUP_FILESYSTEM_PATH": "/tmp/backups"
-    },
-    startup_period=30
+    }
 )
 
 print(f"✅ Weaviate is running at {client.url}")
