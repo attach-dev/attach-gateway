@@ -53,18 +53,24 @@ async def test_validation_error_returns_422(app):
 async def test_integration_stores_in_weaviate(monkeypatch):
     recorded = {}
 
-    class DummyClient:
-        def __init__(self, url):
-            self.data_object = types.SimpleNamespace(create=self.create)
+    class DummyCollection:
+        def insert(self, document):
+            recorded["event"] = document
 
-        def create(self, event, class_name, uuid=None):
-            recorded["event"] = event
-            recorded["class"] = class_name
-            recorded["uuid"] = uuid
+        def __init__(self):
+            self.data = types.SimpleNamespace(insert=self.insert)
+
+    class DummyClient:
+        def __init__(self, url=None):
+            self.collections = types.SimpleNamespace(get=self.get)
+
+        def get(self, name):
+            recorded["class"] = name
+            return DummyCollection()
 
     import mem.weaviate as wv
 
-    monkeypatch.setattr(wv, "weaviate", types.SimpleNamespace(Client=DummyClient))
+    monkeypatch.setattr(wv, "WeaviateClient", DummyClient)
 
     event = {"run_id": "123", "level": "info", "message": "test"}
     await sakana.write(event)

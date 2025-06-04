@@ -4,10 +4,11 @@
 from __future__ import annotations
 
 import os
-import uuid
 import time
+import uuid
 
-import weaviate
+from weaviate import WeaviateClient
+from weaviate.collections import Collection
 
 
 class WeaviateMemory:
@@ -17,14 +18,15 @@ class WeaviateMemory:
         # Lazily initialise the client using the configured URL.  This mirrors
         # the previous behaviour of a module level client but keeps it scoped to
         # the class instance.
-        self._client = weaviate.Client(os.getenv("WEAVIATE_URL"))
+        self._client = WeaviateClient(url=os.getenv("WEAVIATE_URL"))
+        self._collection: Collection = self._client.collections.get("MemoryEvent")
 
     async def write(self, event: dict) -> None:
         """Add an event object to the ``MemoryEvent`` class."""
 
         event["id"] = uuid.uuid4().hex
         event["timestamp"] = int(time.time())
-        self._client.data_object.create(event, "MemoryEvent", uuid=event["id"])
+        self._collection.data.insert(event)
 
 
 # Retain module level helper for backwards compatibility
