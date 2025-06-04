@@ -24,9 +24,7 @@ client = weaviate.connect_to_embedded(
     }
 )
 
-host = getattr(client._connection_params, "hostname", "localhost")
-port = getattr(client._connection_params, "port", 6666)
-print(f"✅ Weaviate is running at http://{host}:{port}")
+print(f"✅ Weaviate is running")
 
 try:
     while True:
