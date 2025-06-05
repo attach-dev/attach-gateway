@@ -1,151 +1,140 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <title>Attach Gateway Demo</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms@3.4.1"></script>
 <style>
- body{margin:0;font:14px/1.4 system-ui;background:#d9d9d9}
- #wrap{padding:20px}
- h1{margin:0 auto 10px;width:640px;text-align:center;border:1px solid #fff;
-    background:#fff;border-radius:8px;font-weight:600}
- .col{float:left;width:48%;margin-right:2%;background:#fff;
-      border-radius:8px;min-height:520px;padding:10px;box-sizing:border-box}
- .col:last-child{margin-right:0}
- .msg{white-space:pre-wrap;font-family:monospace;margin:4px 0}
- .user{color:#333}
- .bot{color:#006dcc}
- #sys{background:#fff;border-radius:8px;height:120px;overflow:auto;padding:6px}
- .send{display:flex;margin-top:6px}
- textarea{flex:1;font:14px monospace;height:42px}
- button{width:38px;border:none;background:#006dcc;color:#fff;border-radius:4px}
- #signin,#signout{margin-bottom:10px;padding:6px 14px;background:#006dcc;color:#fff;
-         border:none;border-radius:6px;font-weight:600;cursor:pointer}
- #signout{margin-left:6px}
+  body {font-family: system-ui, sans-serif;}
 </style>
 </head>
-<body>
-<div id="wrap">
-  <h1>Attach Gateway Demo</h1>
-
-  <button id="signin">Sign in with Attach.dev</button><button id="signout">Sign out</button>
-
-  <div id="planner"  class="col"><h3>Planner Agent</h3></div>
-  <div id="coder"    class="col"><h3>Coder Agent</h3></div>
-
-  <div style="clear:both"></div>
-
-  <div class="send">
-    <textarea id="p_input" placeholder="Ask the Planner…"></textarea>
-    <button onclick="sendPlanner()">➤</button>
+<body class="bg-gray-50 flex flex-col min-h-screen">
+<header class="bg-white shadow sticky top-0 z-10">
+  <div class="max-w-4xl mx-auto py-4 text-center text-xl font-semibold text-gray-700">Attach Gateway Demo</div>
+</header>
+<main class="flex-1 overflow-y-auto scroll-smooth max-w-4xl mx-auto w-full p-4 pb-32" id="transcript">
+  <!-- messages appended here -->
+</main>
+<div class="fixed bottom-0 inset-x-0 bg-white border-t border-gray-200">
+  <div class="max-w-4xl mx-auto p-2 flex items-end gap-2">
+    <div id="tabs" class="flex border rounded-md overflow-hidden text-sm">
+      <button data-role="planner" class="px-3 py-1 bg-blue-100 text-blue-700" id="plannerTab">Ask Planner</button>
+      <button data-role="coder" class="px-3 py-1 text-gray-600 hover:bg-gray-50" id="coderTab">Ask Coder</button>
+    </div>
+    <textarea id="chatInput" rows="1" class="flex-1 resize-none border rounded-md p-2 text-sm focus:outline-none" placeholder="Type a message..."></textarea>
+    <button id="sendBtn" class="p-2 text-blue-700 hover:text-blue-800">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3l5 9-5 9z"/></svg>
+    </button>
   </div>
-
-  <div class="send">
-    <textarea id="c_input" placeholder="(Optional) Talk to Coder directly…"></textarea>
-    <button onclick="sendCoder()">➤</button>
-  </div>
-
-  <h3>System/Memory Logs</h3>
-  <div id="sys"></div>
 </div>
-
+<div id="logPanel" class="fixed bottom-0 inset-x-0 bg-gray-900 text-gray-100 text-xs font-mono">
+  <div id="logHeader" class="flex items-center justify-between px-2 py-1 cursor-pointer border-t border-gray-700">
+    <span>System Logs</span>
+    <svg id="logChevron" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transform transition-transform" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/></svg>
+  </div>
+  <div id="logs" class="hidden max-h-40 overflow-auto px-2 pb-1"></div>
+</div>
 <script>
-const PLANNER_URL = 'http://127.0.0.1:8100/a2a/handle';
-const CODER_URL   = 'http://127.0.0.1:8101/a2a/handle';
-const GW = location.protocol + '//' + location.hostname + ':8080'; // gateway URL
-let jwt = localStorage.jwt || null;
+const transcript = document.getElementById('transcript');
+const logs = document.getElementById('logs');
+const input = document.getElementById('chatInput');
+const plannerTab = document.getElementById('plannerTab');
+const coderTab = document.getElementById('coderTab');
+const sendBtn = document.getElementById('sendBtn');
+const logPanel = document.getElementById('logPanel');
+let activeRole = 'planner';
 
-/* ---------- Auth0 login popup ---------- */
-document.getElementById('signin').onclick = async () => {
-  // Fetch public credentials from gateway
-  const config = await fetch(`${GW}/auth/config`).then(r => r.json());
-  
-  const auth0 = new URL(`https://${config.domain}/authorize`);
-  auth0.search = new URLSearchParams({
-     response_type: 'token',
-     client_id: config.client_id,
-     redirect_uri: location.href,
-     audience: config.audience,
-     scope: 'openid'
-  });
-  window.location = auth0.toString();
-};
-
-document.getElementById('signout').onclick = () => {
-  localStorage.removeItem('jwt');
-  location.reload();
-};
-
-/* ---------- parse hash after login ---------- */
-if (location.hash.startsWith('#access_token=')) {
-  jwt = new URLSearchParams(location.hash.slice(1)).get('access_token');
-  localStorage.jwt = jwt;
-  location.hash = ''; // clean up
+function switchTab(role){
+  activeRole = role;
+  plannerTab.classList.toggle('bg-blue-100', role === 'planner');
+  plannerTab.classList.toggle('text-blue-700', role === 'planner');
+  coderTab.classList.toggle('bg-blue-100', role === 'coder');
+  coderTab.classList.toggle('text-blue-700', role === 'coder');
 }
-if (!jwt) document.getElementById('signout').style.display = 'none';
 
-/* ---------- helpers ---------- */
-function append(id, cls, text){
-  const d=document.createElement('div');
-  d.className='msg '+cls; d.textContent=text;
-  document.getElementById(id).appendChild(d);
-  d.scrollIntoView({block:'end'});
-}
-async function postA2A(url, body){
-  const r = await fetch(url, {
-      method:'POST',
-      headers:{'Authorization':'Bearer '+jwt,'Content-Type':'application/json'},
-      body:JSON.stringify(body)});
-  return r.json();
-}
-async function poll(task){
-  let st;
-  while(true){
-    const r=await fetch(`${GW}/a2a/tasks/status/${task}`,{
-      headers:{'Authorization':'Bearer '+jwt}});
-    st = await r.json();
-    if(st.state==='done') return st.result;
-    await new Promise(res=>setTimeout(res,500));
+plannerTab.onclick = () => switchTab('planner');
+coderTab.onclick = () => switchTab('coder');
+
+function autoGrow(){
+  const newHeight = Math.max(this.scrollHeight, 32);
+  if (this.style.height !== `${newHeight}px`) {
+    this.style.height = 'auto';
+    this.style.height = `${newHeight}px`;
   }
 }
-/* ---------- senders ---------- */
-async function sendPlanner(){
-  const txt=document.getElementById('p_input').value; if(!txt) return;
-  append('planner','user','🗣 '+txt);
-  document.getElementById('p_input').value='';
-  const {task_id}=await postA2A(`${GW}/a2a/tasks/send`,{
-       input:{messages:[{role:'user',content:txt}],stream:false},
-       target_url:PLANNER_URL});
-  const res=await poll(task_id);
-  append('coder','bot','🤖 '+res);
-}
-async function sendCoder(){
-  const txt=document.getElementById('c_input').value; if(!txt) return;
-  append('coder','user','🗣 '+txt);
-  document.getElementById('c_input').value='';
-  const {task_id}=await postA2A(`${GW}/a2a/tasks/send`,{
-       input:{messages:[{role:'user',content:txt}],stream:false},
-       target_url:CODER_URL});
-  const res=await poll(task_id);
-  append('coder','bot','🤖 '+res);
+input.addEventListener('input', autoGrow);
+
+function appendMessage(role, text, fromUser=false){
+  const wrap = document.createElement('div');
+  wrap.className = fromUser ? 'flex justify-end mb-3' : 'flex mb-3';
+  const bubble = document.createElement('div');
+  bubble.className = 'relative rounded-lg p-3 shadow text-sm';
+  if(fromUser){
+    bubble.classList.add('bg-blue-500','text-white');
+  } else {
+    bubble.classList.add('bg-gray-100','text-gray-900');
+    const chip = document.createElement('span');
+    chip.className = 'absolute -left-2 sm:-left-3 top-1 w-6 h-6 rounded-full text-xs flex items-center justify-center';
+    if(role === 'planner'){
+      chip.textContent = '💡';
+      chip.classList.add('bg-blue-200');
+    } else {
+      chip.textContent = '🔧';
+      chip.classList.add('bg-green-200');
+    }
+    bubble.appendChild(chip);
+  }
+  const msg = document.createElement('div');
+  msg.textContent = text;
+  bubble.appendChild(msg);
+  const icons = document.createElement('div');
+  icons.className = 'flex gap-2 mt-1 justify-end text-gray-400';
+  icons.innerHTML = `
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 2H8a2 2 0 00-2 2v16a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2z"/><path d="M9 4h6v2H9z"/></svg>
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16M12 4l8 8-8 8"/></svg>
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M8 7l4-4 4 4"/></svg>`;
+  bubble.appendChild(icons);
+  wrap.appendChild(bubble);
+  transcript.appendChild(wrap);
+  bubble.scrollIntoView();
 }
 
-/* ---------- live gateway log stream (Server-Sent Events) ---------- */
-try {
-  const sse = new EventSource(`${GW}/logs/stream`); // optional SSE route
-  let firstError = true;
-  sse.onmessage = ev => {
-    append('sys', '', ev.data);
-  };
-  sse.onerror = () => {
-    if (firstError) {
-      document.getElementById('sys').style.display = 'none';
-      firstError = false;
-    }
-    sse.close();
-  };
-} catch (e) {
-  document.getElementById('sys').style.display = 'none';
+function log(msg){
+  const line = document.createElement('div');
+  line.textContent = msg;
+  logs.appendChild(line);
+  logs.scrollTop = logs.scrollHeight;
 }
+
+function sendMessage(){
+  const text = input.value.trim();
+  if(!text) return;
+  appendMessage(activeRole, text, true);
+  log(`You -> ${activeRole}: ${text}`);
+  input.value = '';
+  autoGrow.call(input);
+  sendBtn.disabled = true;
+  // TODO: send message to backend or websocket
+  setTimeout(() => {
+    appendMessage(activeRole, text);
+    log(`${activeRole} responded`);
+    sendBtn.disabled = false;
+  }, 300);
+}
+
+sendBtn.onclick = sendMessage;
+input.addEventListener('keydown', e => {
+  if(e.key === 'Enter' && (e.metaKey || e.ctrlKey)){
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+document.getElementById('logHeader').onclick = () => {
+  logs.classList.toggle('hidden');
+  document.getElementById('logChevron').classList.toggle('rotate-180');
+  logPanel.style.bottom = logs.classList.contains('hidden') ? '0' : '4.5rem';
+};
 </script>
 </body>
 </html>
