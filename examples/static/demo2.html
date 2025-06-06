@@ -3,9 +3,15 @@
 <head>
 <meta charset="utf-8" />
 <title>Attach Gateway Demo</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms@3.4.1"></script>
+<script src="https://cdn.tailwindcss.com?plugins=forms@0.5.9"></script>
 <style>
   body {font-family: system-ui, sans-serif;}
+  body.log-open #inputBar {
+    margin-bottom: 10rem; /* Adjust as needed to fit the log panel height */
+  }
+  #logPanel {
+    transition: bottom 0.2s;
+  }
 </style>
 </head>
 <body class="bg-gray-50 flex flex-col min-h-screen">
@@ -15,7 +21,7 @@
 <main class="flex-1 overflow-y-auto scroll-smooth max-w-4xl mx-auto w-full p-4 pb-32" id="transcript">
   <!-- messages appended here -->
 </main>
-<div class="fixed bottom-0 inset-x-0 bg-white border-t border-gray-200">
+<div class="fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 z-20" id="inputBar">
   <div class="max-w-4xl mx-auto p-2 flex items-end gap-2">
     <div id="tabs" class="flex border rounded-md overflow-hidden text-sm">
       <button data-role="planner" class="px-3 py-1 bg-blue-100 text-blue-700" id="plannerTab">Ask Planner</button>
@@ -27,7 +33,7 @@
     </button>
   </div>
 </div>
-<div id="logPanel" class="fixed bottom-0 inset-x-0 bg-gray-900 text-gray-100 text-xs font-mono">
+<div id="logPanel" class="fixed bottom-0 inset-x-0 bg-gray-900 text-gray-100 text-xs font-mono z-30">
   <div id="logHeader" class="flex items-center justify-between px-2 py-1 cursor-pointer border-t border-gray-700">
     <span>System Logs</span>
     <svg id="logChevron" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transform transition-transform" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/></svg>
@@ -42,6 +48,7 @@ const plannerTab = document.getElementById('plannerTab');
 const coderTab = document.getElementById('coderTab');
 const sendBtn = document.getElementById('sendBtn');
 const logPanel = document.getElementById('logPanel');
+const inputBar = document.getElementById('inputBar');
 let activeRole = 'planner';
 
 function switchTab(role){
@@ -133,7 +140,11 @@ input.addEventListener('keydown', e => {
 document.getElementById('logHeader').onclick = () => {
   logs.classList.toggle('hidden');
   document.getElementById('logChevron').classList.toggle('rotate-180');
-  logPanel.style.bottom = logs.classList.contains('hidden') ? '0' : '4.5rem';
+  if (logs.classList.contains('hidden')) {
+    document.body.classList.remove('log-open');
+  } else {
+    document.body.classList.add('log-open');
+  }
 };
 </script>
 </body>
