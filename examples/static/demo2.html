@@ -11,6 +11,7 @@
   }
   #logPanel {
     transition: bottom 0.2s;
+    bottom: 0;
   }
 </style>
 </head>
@@ -18,7 +19,7 @@
 <header class="bg-white shadow sticky top-0 z-10">
   <div class="max-w-4xl mx-auto py-4 text-center text-xl font-semibold text-gray-700">Attach Gateway Demo</div>
 </header>
-<main class="flex-1 overflow-y-auto scroll-smooth max-w-4xl mx-auto w-full p-4 pb-32" id="transcript">
+<main class="flex-1 overflow-y-auto scroll-smooth max-w-4xl mx-auto w-full p-4 pb-32 bg-white border border-gray-300" id="transcript">
   <!-- messages appended here -->
 </main>
 <div class="fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 z-20" id="inputBar">
@@ -49,7 +50,18 @@ const coderTab = document.getElementById('coderTab');
 const sendBtn = document.getElementById('sendBtn');
 const logPanel = document.getElementById('logPanel');
 const inputBar = document.getElementById('inputBar');
+const GW = location.protocol + '//' + location.hostname + ':8080';
+const PLANNER_URL = location.protocol + '//' + location.hostname + ':8100/api/chat';
+const CODER_URL = location.protocol + '//' + location.hostname + ':8101/api/chat';
 let activeRole = 'planner';
+
+function adjustLogPanel(){
+  if(!document.body.classList.contains('log-open')){
+    logPanel.style.bottom = inputBar.offsetHeight + 'px';
+  }
+}
+window.addEventListener('load', adjustLogPanel);
+window.addEventListener('resize', adjustLogPanel);
 
 function switchTab(role){
   activeRole = role;
@@ -69,6 +81,41 @@ function autoGrow(){
     this.style.height = `${newHeight}px`;
   }
 }
+
+transcript.addEventListener('click', e => {
+  const svg = e.target.closest('svg');
+  if(!svg || !svg.parentElement.classList.contains('icons')) return;
+  const icons = svg.parentElement;
+  const bubble = icons.parentElement;
+  const text = bubble.dataset.text || '';
+  const role = bubble.dataset.role;
+  const idx = Array.from(icons.children).indexOf(svg);
+  if(idx === 0){
+    navigator.clipboard.writeText(text);
+    const tip = document.createElement('span');
+    tip.textContent = 'Copied!';
+    tip.className = 'absolute -top-5 right-0 text-xs bg-black text-white px-1 rounded';
+    bubble.appendChild(tip);
+    setTimeout(() => tip.remove(), 1000);
+  } else if(idx === 1){
+    const other = role === 'planner' ? 'coder' : 'planner';
+    switchTab(other);
+    input.value = text;
+    autoGrow.call(input);
+    sendMessage();
+  } else if(idx === 2){
+    const arr = JSON.parse(localStorage.getItem('pinned') || '[]');
+    const i = arr.indexOf(text);
+    if(i === -1){
+      arr.push(text);
+      svg.classList.add('text-yellow-400');
+    } else {
+      arr.splice(i,1);
+      svg.classList.remove('text-yellow-400');
+    }
+    localStorage.setItem('pinned', JSON.stringify(arr));
+  }
+});
 input.addEventListener('input', autoGrow);
 
 function appendMessage(role, text, fromUser=false){
@@ -76,6 +123,9 @@ function appendMessage(role, text, fromUser=false){
   wrap.className = fromUser ? 'flex justify-end mb-3' : 'flex mb-3';
   const bubble = document.createElement('div');
   bubble.className = 'relative rounded-lg p-3 shadow text-sm';
+  bubble.classList.add('max-w-[90%]','xs:max-w-[80%]','sm:max-w-[60%]');
+  bubble.dataset.role = role;
+  bubble.dataset.text = text;
   if(fromUser){
     bubble.classList.add('bg-blue-500','text-white');
   } else {
@@ -95,12 +145,16 @@ function appendMessage(role, text, fromUser=false){
   msg.textContent = text;
   bubble.appendChild(msg);
   const icons = document.createElement('div');
-  icons.className = 'flex gap-2 mt-1 justify-end text-gray-400';
+  icons.className = 'icons flex gap-2 mt-1 justify-end text-gray-400';
   icons.innerHTML = `
     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 2H8a2 2 0 00-2 2v16a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2z"/><path d="M9 4h6v2H9z"/></svg>
     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16M12 4l8 8-8 8"/></svg>
     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M8 7l4-4 4 4"/></svg>`;
   bubble.appendChild(icons);
+  const pinned = JSON.parse(localStorage.getItem('pinned') || '[]');
+  if(pinned.includes(text)){
+    icons.children[2].classList.add('text-yellow-400');
+  }
   wrap.appendChild(bubble);
   transcript.appendChild(wrap);
   bubble.scrollIntoView();
@@ -121,12 +175,54 @@ function sendMessage(){
   input.value = '';
   autoGrow.call(input);
   sendBtn.disabled = true;
-  // TODO: send message to backend or websocket
-  setTimeout(() => {
-    appendMessage(activeRole, text);
-    log(`${activeRole} responded`);
+  const jwt = localStorage.getItem('jwt');
+  if(!jwt){ log('Error: localStorage.jwt missing'); sendBtn.disabled = false; return; }
+  const body = {
+    input: {
+      model: 'tinyllama',
+      messages: [{ role: 'user', content: text }],
+      stream: false
+    },
+    target_url: activeRole === 'planner' ? PLANNER_URL : CODER_URL
+  };
+  fetch(`${GW}/a2a/tasks/send`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${jwt}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  })
+    .then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(t)))
+    .then(({task_id}) => pollResult(task_id))
+    .catch(err => { log('Error: ' + err); sendBtn.disabled = false; });
+}
+
+async function pollResult(tid){
+  const jwt = localStorage.getItem('jwt');
+  try{
+    while(true){
+      await new Promise(r => setTimeout(r, 800));
+      const r = await fetch(`${GW}/a2a/tasks/status/${tid}`, {
+        headers: { 'Authorization': `Bearer ${jwt}` }
+      });
+      const st = await r.json();
+      if(st.state === 'done'){
+        const ans = st.result.choices?.[0]?.message?.content || JSON.stringify(st.result);
+        appendMessage(activeRole, ans);
+        log(`${activeRole} responded`);
+        sendBtn.disabled = false;
+        break;
+      } else if(st.state === 'error'){
+        log('Upstream error: ' + JSON.stringify(st.result));
+        sendBtn.disabled = false;
+        break;
+      }
+    }
+  }catch(err){
+    log('Error: ' + err);
     sendBtn.disabled = false;
-  }, 300);
+  }
 }
 
 sendBtn.onclick = sendMessage;
@@ -142,8 +238,10 @@ document.getElementById('logHeader').onclick = () => {
   document.getElementById('logChevron').classList.toggle('rotate-180');
   if (logs.classList.contains('hidden')) {
     document.body.classList.remove('log-open');
+    adjustLogPanel();
   } else {
     document.body.classList.add('log-open');
+    logPanel.style.bottom = '0';
   }
 };
 </script>
