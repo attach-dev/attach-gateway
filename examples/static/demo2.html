@@ -207,6 +207,7 @@ async function pollResult(tid){
         headers: { 'Authorization': `Bearer ${jwt}` }
       });
       const st = await r.json();
+      console.log('status →', st);
       if(st.state === 'done'){
         const ans = st.result.choices?.[0]?.message?.content || JSON.stringify(st.result);
         appendMessage(activeRole, ans);
