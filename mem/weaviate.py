@@ -9,6 +9,7 @@ import uuid
 
 from weaviate import WeaviateClient
 from weaviate.collections import Collection
+from weaviate.connect import ConnectionParams
 
 
 class WeaviateMemory:
@@ -18,7 +19,10 @@ class WeaviateMemory:
         # Lazily initialise the client using the configured URL.  This mirrors
         # the previous behaviour of a module level client but keeps it scoped to
         # the class instance.
-        self._client = WeaviateClient(url=os.getenv("WEAVIATE_URL"))
+        http_url = os.getenv("WEAVIATE_URL", "http://127.0.0.1:6666")
+        grpc_port = int(os.getenv("WEAVIATE_GRPC_PORT", 50051))
+        params = ConnectionParams.from_url(http_url, grpc_port=grpc_port)
+        self._client = WeaviateClient(connection_params=params)
         self._collection: Collection = self._client.collections.get("MemoryEvent")
 
     async def write(self, event: dict) -> None:

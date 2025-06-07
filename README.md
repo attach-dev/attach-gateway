@@ -27,9 +27,9 @@ Run it next to any model server and get secure, shareable context in under 1 mi
 
 git clone https://github.com/attach-dev/attach-gateway.git && cd attach-gateway
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt weaviate-client[embedded]
+pip install -r requirements.txt
 
-# 1) start embedded memory (background tab)
+# 1) start memory in Docker (background tab)
 python script/start_weaviate.py &
 
 # 2) export your short‑lived token
@@ -38,6 +38,7 @@ export OIDC_ISSUER=https://YOUR_DOMAIN.auth0.com
 export OIDC_AUD=ollama-local
 export MEM_BACKEND=weaviate
 export WEAVIATE_URL=http://127.0.0.1:6666
+export WEAVIATE_GRPC_PORT=50051
 
 # 3) run gateway
 uvicorn main:app --port 8080 &
@@ -119,10 +120,10 @@ flowchart TD
 
 ---
 
-## Live two‑agent demo (no Docker)
+## Live two‑agent demo
 
 ```bash
-# pane 1 – memory
+# pane 1 – memory (Docker)
 python script/start_weaviate.py
 
 # pane 2 – gateway

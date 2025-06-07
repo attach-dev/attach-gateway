@@ -61,7 +61,7 @@ async def test_integration_stores_in_weaviate(monkeypatch):
             self.data = types.SimpleNamespace(insert=self.insert)
 
     class DummyClient:
-        def __init__(self, url=None):
+        def __init__(self, *args, **kwargs):
             self.collections = types.SimpleNamespace(get=self.get)
 
         def get(self, name):
