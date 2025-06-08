@@ -11,9 +11,9 @@ import weaviate
 # We expose 8080 inside the container – forwarded to 6666 on the host
 client = weaviate.Client("http://localhost:6666")
 
-# Make sure the class exists (user has chatted once)
-if not client.schema.contains({"class": "MemoryEvent"}):
-    print("⚠️  No MemoryEvent class yet.  Send a chat first.")
+classes = {c["class"] for c in client.schema.get().get("classes", [])}
+if "MemoryEvent" not in classes:
+    print("⚠️  No MemoryEvent class yet (run a chat first)")
     exit(0)
 
 # Fetch the last 10 events, newest first
@@ -25,9 +25,19 @@ result = (
     .do()
 )
 
+if "errors" in result:
+    print("GraphQL error:", result["errors"])
+    exit(1)
+if "data" not in result:
+    print("No data in response:", result)
+    exit(1)
+
 objs = result["data"]["Get"]["MemoryEvent"]
 print(f"Fetched {len(objs)} events\n")
 for o in objs:
     print(json.dumps(o, indent=2)[:600], "...\n")
+
+objs = client.data_object.get(class_name="MemoryEvent", limit=1)
+print(objs)
 
 client.close()

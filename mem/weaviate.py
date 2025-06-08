@@ -13,19 +13,14 @@ class WeaviateMemory:
     """Store events in a Weaviate collection."""
 
     def __init__(self, url: str = "http://localhost:6666"):
+        # v3 client – simple REST endpoint, no gRPC
         self._client = weaviate.Client(url)
-        # ensure schema is present once at start-up
-        if not self._client.schema.contains({"class": "MemoryEvent"}):
-            self._client.schema.create_class(
-                {
-                    "class": "MemoryEvent",
-                    "properties": [
-                        {"name": "timestamp", "dataType": ["date"]},
-                        {"name": "role", "dataType": ["text"]},
-                        {"name": "content", "dataType": ["text"]},
-                    ],
-                }
-            )
+
+        # ---- ensure class exists (v3 style) ----
+        classes = {c["class"] for c in self._client.schema.get().get("classes", [])}
+        if "MemoryEvent" not in classes:
+            print("⚠️  No MemoryEvent class yet (run a chat first)")
+            exit(0)
 
     async def write(self, event: dict):
         loop = asyncio.get_running_loop()
