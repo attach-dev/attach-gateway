@@ -1,4 +1,20 @@
 <!DOCTYPE html>
+<!--
+  Attach Gateway demo UI
+  ----------------------
+    1. Open browser dev‑tools and run:
+       localStorage.setItem('jwt', '<YOUR_TOKEN>')
+    2. In another three terminals:
+       $ uvicorn main:app --port 8080
+       $ uvicorn examples.agents.planner:app --port 8100
+       $ uvicorn examples.agents.coder:app   --port 8101
+    3. Refresh this page, pick a tab ("Ask Planner" / "Ask Coder"),
+       type a message. Watch logs slide up from the bottom.
+
+  The page calls /a2a/tasks/send on the gateway, which proxies to the
+  chosen agent and records every hop in Weaviate – the JSON events are
+  appended live in the log drawer for clarity.
+-->
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -6,12 +22,99 @@
 <script src="https://cdn.tailwindcss.com?plugins=forms@0.5.9"></script>
 <style>
   body {font-family: system-ui, sans-serif;}
-  body.log-open #inputBar {
-    margin-bottom: 10rem; /* Adjust as needed to fit the log panel height */
-  }
+  
+  /* System Logs panel - always fixed to bottom */
   #logPanel {
-    transition: bottom 0.2s;
+    position: fixed;
+    left: 0;
+    right: 0;
     bottom: 0;
+    z-index: 30;
+    background-color: #1f2937; /* bg-gray-800 */
+    transition: all .2s ease-in-out;
+    /* Default state: only show header */
+    height: 2.5rem; /* Fixed height for header only */
+    overflow: hidden;
+  }
+  
+  /* When log panel is open, expand to show content */
+  body.log-open #logPanel {
+    height: 12rem; /* Expanded height */
+  }
+  
+  /* Log content styling */
+  #logs {
+    height: 9.5rem; /* Total height minus header height */
+    opacity: 0;
+    transition: opacity .2s ease-in-out .1s; /* Slight delay for smooth appearance */
+  }
+  
+  body.log-open #logs {
+    opacity: 1;
+  }
+  
+  /* Chat input bar - positioned above the log panel */
+  #inputBar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 2.5rem; /* Height of collapsed log panel */
+    z-index: 20;
+    transition: bottom .2s ease-in-out;
+  }
+  
+  /* When log panel is open, move chat bar up */
+  body.log-open #inputBar {
+    bottom: 12rem; /* Height of expanded log panel */
+  }
+  
+  /* Main transcript area - ensure it has bottom padding */
+  #transcript {
+    padding-bottom: 8rem; /* Space for chat bar + collapsed log panel */
+    transition: padding-bottom .2s ease-in-out;
+  }
+  
+  /* When log panel is open, add more bottom padding to transcript */
+  body.log-open #transcript {
+    padding-bottom: 18rem; /* Space for chat bar + expanded log panel */
+  }
+  
+  /* Ensure log header is always visible and clickable */
+  #logHeader {
+    height: 2.5rem;
+    flex-shrink: 0;
+  }
+  
+  /* Thinking indicator styles */
+  .thinking-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-style: italic;
+    color: #6b7280; /* text-gray-500 */
+  }
+  
+  .spinner {
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid #e5e7eb; /* border-gray-200 */
+    border-top: 2px solid #3b82f6; /* border-blue-500 */
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  /* Ensure text wraps properly in message bubbles */
+  .message-content {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    white-space: pre-wrap; /* Preserve line breaks and wrap text */
+    max-width: 100%;
   }
 </style>
 </head>
@@ -34,12 +137,14 @@
     </button>
   </div>
 </div>
-<div id="logPanel" class="fixed bottom-0 inset-x-0 bg-gray-900 text-gray-100 text-xs font-mono z-30">
-  <div id="logHeader" class="flex items-center justify-between px-2 py-1 cursor-pointer border-t border-gray-700">
+<div id="logPanel" class="fixed bottom-0 inset-x-0 text-gray-100 text-xs font-mono z-30">
+  <div id="logHeader" class="flex items-center justify-between px-2 py-1 cursor-pointer border-t border-gray-700 h-10">
     <span>System Logs</span>
-    <svg id="logChevron" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transform transition-transform" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/></svg>
+    <svg id="logChevron" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transform transition-transform duration-200" viewBox="0 0 20 20" fill="currentColor">
+      <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/>
+    </svg>
   </div>
-  <div id="logs" class="hidden max-h-40 overflow-auto px-2 pb-1"></div>
+  <div id="logs" class="overflow-auto px-2 pb-1"></div>
 </div>
 <script>
 const transcript = document.getElementById('transcript');
@@ -54,14 +159,7 @@ const GW = location.protocol + '//' + location.hostname + ':8080';
 const PLANNER_URL = location.protocol + '//' + location.hostname + ':8100/api/chat';
 const CODER_URL = location.protocol + '//' + location.hostname + ':8101/api/chat';
 let activeRole = 'planner';
-
-function adjustLogPanel(){
-  if(!document.body.classList.contains('log-open')){
-    logPanel.style.bottom = inputBar.offsetHeight + 'px';
-  }
-}
-window.addEventListener('load', adjustLogPanel);
-window.addEventListener('resize', adjustLogPanel);
+let thinkingElement = null;
 
 function switchTab(role){
   activeRole = role;
@@ -142,7 +240,8 @@ function appendMessage(role, text, fromUser=false){
     bubble.appendChild(chip);
   }
   const msg = document.createElement('div');
-  msg.textContent = text;
+  msg.className = 'message-content';
+  msg.innerText = text;
   bubble.appendChild(msg);
   const icons = document.createElement('div');
   icons.className = 'icons flex gap-2 mt-1 justify-end text-gray-400';
@@ -160,6 +259,50 @@ function appendMessage(role, text, fromUser=false){
   bubble.scrollIntoView();
 }
 
+function appendThinkingIndicator(role) {
+  const wrap = document.createElement('div');
+  wrap.className = 'flex mb-3';
+  wrap.id = 'thinking-indicator';
+  
+  const bubble = document.createElement('div');
+  bubble.className = 'relative rounded-lg p-3 shadow text-sm bg-gray-50 text-gray-600 max-w-[90%] xs:max-w-[80%] sm:max-w-[60%]';
+  
+  // Add role chip
+  const chip = document.createElement('span');
+  chip.className = 'absolute -left-2 sm:-left-3 top-1 w-6 h-6 rounded-full text-xs flex items-center justify-center';
+  if(role === 'planner'){
+    chip.textContent = '💡';
+    chip.classList.add('bg-blue-200');
+  } else {
+    chip.textContent = '🔧';
+    chip.classList.add('bg-green-200');
+  }
+  bubble.appendChild(chip);
+  
+  // Add thinking indicator content
+  const content = document.createElement('div');
+  content.className = 'thinking-indicator';
+  content.innerHTML = `
+    <div class="spinner"></div>
+    <span>Thinking...</span>
+  `;
+  bubble.appendChild(content);
+  
+  wrap.appendChild(bubble);
+  transcript.appendChild(wrap);
+  bubble.scrollIntoView();
+  
+  thinkingElement = wrap;
+  return wrap;
+}
+
+function removeThinkingIndicator() {
+  if (thinkingElement) {
+    thinkingElement.remove();
+    thinkingElement = null;
+  }
+}
+
 function log(msg){
   const line = document.createElement('div');
   line.textContent = msg;
@@ -170,13 +313,25 @@ function log(msg){
 function sendMessage(){
   const text = input.value.trim();
   if(!text) return;
+  
   appendMessage(activeRole, text, true);
   log(`You -> ${activeRole}: ${text}`);
+  
+  // Show thinking indicator
+  appendThinkingIndicator(activeRole);
+  
   input.value = '';
   autoGrow.call(input);
   sendBtn.disabled = true;
+  
   const jwt = localStorage.getItem('jwt');
-  if(!jwt){ log('Error: localStorage.jwt missing'); sendBtn.disabled = false; return; }
+  if(!jwt){ 
+    log('Error: localStorage.jwt missing'); 
+    removeThinkingIndicator();
+    sendBtn.disabled = false; 
+    return; 
+  }
+  
   const body = {
     input: {
       model: 'tinyllama',
@@ -185,6 +340,7 @@ function sendMessage(){
     },
     target_url: activeRole === 'planner' ? PLANNER_URL : CODER_URL
   };
+  
   fetch(`${GW}/a2a/tasks/send`, {
     method: 'POST',
     headers: {
@@ -195,7 +351,11 @@ function sendMessage(){
   })
     .then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(t)))
     .then(({task_id}) => pollResult(task_id))
-    .catch(err => { log('Error: ' + err); sendBtn.disabled = false; });
+    .catch(err => { 
+      log('Error: ' + err); 
+      removeThinkingIndicator();
+      sendBtn.disabled = false; 
+    });
 }
 
 async function pollResult(tid){
@@ -210,18 +370,23 @@ async function pollResult(tid){
       console.log('status →', st);
       if(st.state === 'done'){
         const ans = st.result.choices?.[0]?.message?.content || JSON.stringify(st.result);
+        
+        // Remove thinking indicator and show real response
+        removeThinkingIndicator();
         appendMessage(activeRole, ans);
         log(`${activeRole} responded`);
         sendBtn.disabled = false;
         break;
       } else if(st.state === 'error'){
         log('Upstream error: ' + JSON.stringify(st.result));
+        removeThinkingIndicator();
         sendBtn.disabled = false;
         break;
       }
     }
   }catch(err){
     log('Error: ' + err);
+    removeThinkingIndicator();
     sendBtn.disabled = false;
   }
 }
@@ -235,15 +400,17 @@ input.addEventListener('keydown', e => {
 });
 
 document.getElementById('logHeader').onclick = () => {
-  logs.classList.toggle('hidden');
-  document.getElementById('logChevron').classList.toggle('rotate-180');
-  if (logs.classList.contains('hidden')) {
-    document.body.classList.remove('log-open');
-    adjustLogPanel();
-  } else {
-    document.body.classList.add('log-open');
-    logPanel.style.bottom = '0';
-  }
+    const body = document.body;
+    const chevron = document.getElementById('logChevron');
+    
+    body.classList.toggle('log-open');
+    
+    // Rotate chevron to indicate state
+    if (body.classList.contains('log-open')) {
+        chevron.style.transform = 'rotate(180deg)';
+    } else {
+        chevron.style.transform = 'rotate(0deg)';
+    }
 };
 </script>
 </body>
