@@ -53,29 +53,24 @@ async def test_validation_error_returns_422(app):
 async def test_integration_stores_in_weaviate(monkeypatch):
     recorded = {}
 
-    class DummyCollection:
-        def insert(self, document):
-            recorded["event"] = document
-
-        def __init__(self):
-            self.data = types.SimpleNamespace(insert=self.insert)
-
     class DummyClient:
         def __init__(self, *args, **kwargs):
-            self.collections = types.SimpleNamespace(get=self.get)
+            self.schema = types.SimpleNamespace(
+                contains=lambda x: True, create_class=lambda x: None
+            )
+            self.data_object = types.SimpleNamespace(create=self.create)
 
-        def get(self, name):
-            recorded["class"] = name
-            return DummyCollection()
+        def create(self, data_object, class_name):
+            recorded["event"] = data_object
+            recorded["class"] = class_name
 
     import mem.weaviate as wv
 
-    monkeypatch.setattr(wv, "WeaviateClient", DummyClient)
+    monkeypatch.setattr(wv.weaviate, "Client", DummyClient)
 
     event = {"run_id": "123", "level": "info", "message": "test"}
     await sakana.write(event)
 
     assert recorded["class"] == "MemoryEvent"
-    assert "id" in recorded["event"]
-    assert "timestamp" in recorded["event"]
+    assert recorded["event"] == event
     assert recorded["event"]["level"] == "info"

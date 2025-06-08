@@ -3,34 +3,40 @@
 
 from __future__ import annotations
 
-import os
-import time
-import uuid
+import asyncio
+import functools
 
-from weaviate import WeaviateClient
-from weaviate.collections import Collection
-from weaviate.connect import ConnectionParams
+import weaviate
 
 
 class WeaviateMemory:
     """Store events in a Weaviate collection."""
 
-    def __init__(self) -> None:
-        # Lazily initialise the client using the configured URL.  This mirrors
-        # the previous behaviour of a module level client but keeps it scoped to
-        # the class instance.
-        http_url = os.getenv("WEAVIATE_URL", "http://127.0.0.1:6666")
-        grpc_port = int(os.getenv("WEAVIATE_GRPC_PORT", 50051))
-        params = ConnectionParams.from_url(http_url, grpc_port=grpc_port)
-        self._client = WeaviateClient(connection_params=params)
-        self._collection: Collection = self._client.collections.get("MemoryEvent")
+    def __init__(self, url: str = "http://localhost:6666"):
+        self._client = weaviate.Client(url)
+        # ensure schema is present once at start-up
+        if not self._client.schema.contains({"class": "MemoryEvent"}):
+            self._client.schema.create_class(
+                {
+                    "class": "MemoryEvent",
+                    "properties": [
+                        {"name": "timestamp", "dataType": ["date"]},
+                        {"name": "role", "dataType": ["text"]},
+                        {"name": "content", "dataType": ["text"]},
+                    ],
+                }
+            )
 
-    async def write(self, event: dict) -> None:
-        """Add an event object to the ``MemoryEvent`` class."""
-
-        event["id"] = uuid.uuid4().hex
-        event["timestamp"] = int(time.time())
-        self._collection.data.insert(event)
+    async def write(self, event: dict):
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            None,
+            functools.partial(
+                self._client.data_object.create,
+                data_object=event,
+                class_name="MemoryEvent",
+            ),
+        )
 
 
 # Retain module level helper for backwards compatibility

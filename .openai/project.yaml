@@ -5,7 +5,7 @@ python_version: "3.12"
 
 setup_commands:
   - ["pip", "install", "-r", "requirements.txt"]
-  - ["pip", "install", "weaviate-client[embedded]", "httpx", "pytest-asyncio"]
+  - ["pip", "install", "weaviate-client", "httpx", "pytest-asyncio"]
   - ["python", "script/start_weaviate.py", "&"]
 
 env:
