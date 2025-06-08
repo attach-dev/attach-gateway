@@ -11,7 +11,7 @@ class NullMemory:
 def _load_backend():
     backend = os.getenv("MEM_BACKEND", "none").lower()
     if backend == "weaviate":
-        from .weaviate import WeaviateMemory  # v4 client
+        from .weaviate import WeaviateMemory  # v3 REST client
 
         return WeaviateMemory()
 

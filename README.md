@@ -13,7 +13,7 @@ LLM engines such as **Ollama** or **vLLM** ship with **zero auth**.  Agent‑to�
 *   ✅ Verifies **OIDC / JWT** or **DID‑JWT**
 *   ✅ Stamps `X‑ATTACH‑User` + `X‑ATTACH‑Session` headers so every downstream agent/tool sees the same identity
 *   ✅ Implements `/a2a/tasks/send` + `/tasks/status` for Google A2A & OpenHands hand‑off
-*   ✅ Mirrors prompts & responses to a memory backend (Weaviate embedded by default)
+*   ✅ Mirrors prompts & responses to a memory backend (Weaviate Docker container by default)
 *   ✅ Workflow traces (Temporal)
 
 Run it next to any model server and get secure, shareable context in under 1 minute.
@@ -38,7 +38,6 @@ export OIDC_ISSUER=https://YOUR_DOMAIN.auth0.com
 export OIDC_AUD=ollama-local
 export MEM_BACKEND=weaviate
 export WEAVIATE_URL=http://127.0.0.1:6666
-export WEAVIATE_GRPC_PORT=50051
 
 # 3) run gateway
 uvicorn main:app --port 8080 &
@@ -82,7 +81,7 @@ flowchart TD
     end
 
     subgraph Memory
-        WV["Weaviate (embedded)\nclass MemoryEvent"]
+        WV["Weaviate (Docker)\nclass MemoryEvent"]
     end
 
     subgraph Engine

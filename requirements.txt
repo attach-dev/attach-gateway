@@ -11,7 +11,7 @@ pytest>=8.0.0
 pytest-asyncio>=0.23.0
 
 # Memory Backend (Optional)
-weaviate-client[embedded]>=4.15.0
+weaviate-client>=3.26.7,<4.0.0
 
 # Development Tools
 black>=24.1.0
