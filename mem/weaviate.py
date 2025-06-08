@@ -38,6 +38,14 @@ class WeaviateMemory:
 
     async def write(self, event: dict):
         loop = asyncio.get_running_loop()
+        # Ensure timestamp matches RFC 3339 if schema expects "date"
+        if isinstance(event.get("timestamp"), (int, float)):
+            from datetime import datetime, timezone
+
+            event["timestamp"] = datetime.fromtimestamp(
+                event["timestamp"], tz=timezone.utc
+            ).isoformat(timespec="milliseconds")
+
         await loop.run_in_executor(
             None,
             functools.partial(

@@ -18,10 +18,9 @@ if "MemoryEvent" not in classes:
 
 # Fetch the last 10 events, newest first
 result = (
-    client.query.get("MemoryEvent", ["id", "timestamp", "role", "content"])
+    client.query.get("MemoryEvent", ["timestamp", "role", "content"])
     .with_additional(["id"])
     .with_limit(10)
-    .with_near_text({"concepts": ["*"]})  # noop, preserves creation order
     .do()
 )
 
@@ -39,5 +38,3 @@ for o in objs:
 
 objs = client.data_object.get(class_name="MemoryEvent", limit=1)
 print(objs)
-
-client.close()
