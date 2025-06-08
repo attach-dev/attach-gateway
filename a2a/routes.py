@@ -10,6 +10,8 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
+from mem import write as mem_write
+
 router = APIRouter()
 
 # --------------------------------------------------------------------------- #
@@ -44,7 +46,11 @@ async def _execute_temporal(target: str, payload: dict[str, Any], task_id: str) 
 
 
 async def _forward_call(
-    body: dict[str, Any], headers: dict[str, str], task_id: str
+    body: dict[str, Any],
+    headers: dict[str, str],
+    task_id: str,
+    sid: str,
+    sub: str,
 ) -> None:
     """
     Fire-and-forget helper that forwards the wrapped `input` to the chat engine
@@ -54,6 +60,17 @@ async def _forward_call(
 
     async with _LOCK:
         _TASKS[task_id]["state"] = "in_progress"
+
+    await mem_write(
+        {
+            "timestamp": time.time(),
+            "session_id": sid,
+            "user": sub,
+            "task_id": task_id,
+            "event": "task_sent",
+            "payload": body.get("input"),
+        }
+    )
 
     try:
         if target.startswith("temporal://"):
@@ -70,6 +87,18 @@ async def _forward_call(
 
     async with _LOCK:
         _TASKS[task_id].update(state=state, result=result)
+
+    await mem_write(
+        {
+            "timestamp": time.time(),
+            "session_id": sid,
+            "user": sub,
+            "task_id": task_id,
+            "event": "task_result",
+            "state": state,
+            "result": result,
+        }
+    )
 
 
 async def _evict_expired() -> None:
@@ -104,7 +133,16 @@ async def tasks_send(req: Request, bg: BackgroundTasks):
     }
     headers = {k: v for k, v in base_headers.items() if v is not None}
 
-    bg.add_task(_forward_call, body, headers, task_id)
+    sid = getattr(req.state, "sid", "") or req.headers.get("x-attach-session", "")
+    sub = getattr(req.state, "sub", "")
+    bg.add_task(
+        _forward_call,
+        body,
+        headers,
+        task_id,
+        sid,
+        sub,
+    )
     bg.add_task(_evict_expired)
 
     return {"task_id": task_id, "state": "queued"}
