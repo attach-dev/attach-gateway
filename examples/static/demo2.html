@@ -139,10 +139,13 @@
 </div>
 <div id="logPanel" class="fixed bottom-0 inset-x-0 text-gray-100 text-xs font-mono z-30">
   <div id="logHeader" class="flex items-center justify-between px-2 py-1 cursor-pointer border-t border-gray-700 h-10">
-    <span>System Logs</span>
-    <svg id="logChevron" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transform transition-transform duration-200" viewBox="0 0 20 20" fill="currentColor">
-      <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/>
-    </svg>
+    <span>Memory Logs</span>
+    <div class="flex items-center gap-2">
+      <button id="refreshMemory" class="text-blue-400 hover:text-blue-300 text-xs">↻ Refresh</button>
+      <svg id="logChevron" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transform transition-transform duration-200" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/>
+      </svg>
+    </div>
   </div>
   <div id="logs" class="overflow-auto px-2 pb-1"></div>
 </div>
@@ -160,6 +163,37 @@ const PLANNER_URL = location.protocol + '//' + location.hostname + ':8100/api/ch
 const CODER_URL = location.protocol + '//' + location.hostname + ':8101/api/chat';
 let activeRole = 'planner';
 let thinkingElement = null;
+
+// Track system logs and expanded states
+let systemLogEntries = [];
+let expandedEventIds = new Set();
+
+// Enhanced logging function that tracks entries with timestamps
+function logSimple(msg) {
+  const timestamp = new Date();
+  const entry = {
+    type: 'system',
+    timestamp: timestamp,
+    message: msg,
+    id: `system-${timestamp.getTime()}`
+  };
+  systemLogEntries.push(entry);
+  
+  // Keep only last 20 system logs to prevent memory buildup
+  if (systemLogEntries.length > 20) {
+    systemLogEntries = systemLogEntries.slice(-20);
+  }
+  
+  // If logs panel is open, refresh the display (preserve scroll for system logs)
+  if (document.body.classList.contains('log-open')) {
+    refreshLogsDisplay(false); // Don't scroll to top for system log additions
+  }
+}
+
+// Replace the old log function
+function log(msg) {
+  logSimple(msg);
+}
 
 function switchTab(role){
   activeRole = role;
@@ -303,12 +337,236 @@ function removeThinkingIndicator() {
   }
 }
 
-function log(msg){
-  const line = document.createElement('div');
-  line.textContent = msg;
-  logs.appendChild(line);
-  logs.scrollTop = logs.scrollHeight;
+// Memory logs functionality - SILENT polling
+async function fetchMemoryLogs(showStatus = true) {
+  try {
+    const response = await fetch(`${GW}/mem/events?limit=10`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('jwt')}`
+      }
+    });
+    
+    if (!response.ok) {
+      if (showStatus) {
+        logSimple(`Error: HTTP ${response.status}: ${response.statusText}`);
+      }
+      return;
+    }
+    
+    const data = await response.json();
+    displayMemoryLogs(data, showStatus);
+    
+  } catch (error) {
+    if (showStatus) {
+      logSimple(`Error fetching memory: ${error.message}`);
+    }
+  }
 }
+
+function displayMemoryLogs(weaviateResponse, showStatus = true) {
+  // Check if we have memory events
+  if (!weaviateResponse?.data?.Get?.MemoryEvent) {
+    if (showStatus) {
+      logSimple('No MemoryEvent data found');
+    }
+    return;
+  }
+  
+  const events = weaviateResponse.data.Get.MemoryEvent;
+  
+  // Only show loading message on first load or manual refresh
+  if (showStatus) {
+    logSimple(`Loaded ${events.length} memory events (newest first)`);
+  }
+  
+  // Store the memory events and refresh display
+  window.memoryEvents = events;
+  refreshLogsDisplay(showStatus); // Only scroll to top if showing status (first load/manual refresh)
+}
+
+function refreshLogsDisplay(scrollToTop = false) {
+  // Store current scroll position and expanded states
+  const currentScrollTop = logs.scrollTop;
+  const currentExpanded = Array.from(logs.children)
+    .filter(child => child.classList.contains('expanded'))
+    .map(child => child.dataset.eventId)
+    .filter(id => id);
+  
+  expandedEventIds = new Set(currentExpanded);
+  
+  // Clear logs
+  logs.innerHTML = '';
+  
+  // Combine system logs and memory events
+  const allEntries = [];
+  
+  // Add system log entries
+  systemLogEntries.forEach(entry => {
+    allEntries.push({
+      ...entry,
+      timestamp: entry.timestamp
+    });
+  });
+  
+  // Add memory events
+  if (window.memoryEvents) {
+    window.memoryEvents.forEach(event => {
+      allEntries.push({
+        type: 'memory',
+        timestamp: new Date(event.timestamp),
+        event: event,
+        id: event._additional.id
+      });
+    });
+  }
+  
+  // Sort by timestamp (newest first)
+  allEntries.sort((a, b) => b.timestamp - a.timestamp);
+  
+  // Render all entries in chronological order
+  allEntries.forEach(entry => {
+    if (entry.type === 'system') {
+      const line = document.createElement('div');
+      line.className = 'text-yellow-300 pb-1';
+      line.textContent = `[${entry.timestamp.toLocaleTimeString()}] ${entry.message}`;
+      logs.appendChild(line);
+    } else {
+      renderMemoryEvent(entry.event);
+    }
+  });
+  
+  // Restore scroll position or scroll to top based on context
+  if (scrollToTop) {
+    logs.scrollTop = 0; // Scroll to top for intentional actions
+  } else {
+    // Restore previous scroll position for silent updates
+    setTimeout(() => {
+      logs.scrollTop = currentScrollTop;
+    }, 0);
+  }
+}
+
+function renderMemoryEvent(event) {
+  const logEntry = document.createElement('div');
+  logEntry.className = 'border-b border-gray-600 pb-2 mb-2';
+  logEntry.dataset.eventId = event._additional.id;
+  
+  // Create a more readable format
+  const timestamp = new Date(event.timestamp).toLocaleTimeString();
+  const id = event._additional.id.substring(0, 8);
+  
+  let displayContent = '';
+  let eventType = 'unknown';
+  let model = 'unknown';
+  
+  // Check if this is a rich event with result data
+  if (event.result?.choices?.[0]?.message?.content) {
+    const message = event.result.choices[0].message.content;
+    displayContent = message.length > 200 ? message.substring(0, 200) + '...' : message;
+    model = event.result.model || 'unknown';
+    eventType = 'response';
+  } else if (event.content) {
+    displayContent = event.content.length > 200 ? event.content.substring(0, 200) + '...' : event.content;
+    eventType = 'content';
+  } else if (event.event) {
+    displayContent = `[${event.event}]`;
+    eventType = event.event;
+  } else {
+    displayContent = '[No content available]';
+  }
+  
+  // Color code by event type
+  let headerColor = 'text-blue-300';
+  if (eventType === 'response') headerColor = 'text-green-300';
+  else if (eventType === 'content') headerColor = 'text-cyan-300';
+  
+  // Check if this event should be expanded
+  const isExpanded = expandedEventIds.has(event._additional.id);
+  
+  if (isExpanded) {
+    logEntry.classList.add('expanded');
+    logEntry.innerHTML = `
+      <div class="${headerColor} text-xs font-bold">
+        ${timestamp} [${id}] ${model} (${eventType}) - EXPANDED
+      </div>
+      <pre class="text-gray-300 pl-2 whitespace-pre-wrap text-xs overflow-hidden max-h-60 overflow-y-auto">${JSON.stringify(event, null, 2)}</pre>
+    `;
+  } else {
+    logEntry.innerHTML = `
+      <div class="${headerColor} text-xs font-bold">
+        ${timestamp} [${id}] ${model} (${eventType})
+      </div>
+      <div class="text-gray-300 pl-2 text-xs leading-relaxed">${displayContent.replace(/\n/g, ' ')}</div>
+    `;
+  }
+  
+  // Click to expand full details
+  logEntry.style.cursor = 'pointer';
+  logEntry.onclick = () => {
+    const eventId = event._additional.id;
+    if (logEntry.classList.contains('expanded')) {
+      // Collapse
+      logEntry.classList.remove('expanded');
+      expandedEventIds.delete(eventId);
+      logEntry.innerHTML = `
+        <div class="${headerColor} text-xs font-bold">
+          ${timestamp} [${id}] ${model} (${eventType})
+        </div>
+        <div class="text-gray-300 pl-2 text-xs leading-relaxed">${displayContent.replace(/\n/g, ' ')}</div>
+      `;
+    } else {
+      // Expand
+      logEntry.classList.add('expanded');
+      expandedEventIds.add(eventId);
+      logEntry.innerHTML = `
+        <div class="${headerColor} text-xs font-bold">
+          ${timestamp} [${id}] ${model} (${eventType}) - EXPANDED
+        </div>
+        <pre class="text-gray-300 pl-2 whitespace-pre-wrap text-xs overflow-hidden max-h-60 overflow-y-auto">${JSON.stringify(event, null, 2)}</pre>
+      `;
+    }
+  };
+  
+  logs.appendChild(logEntry);
+}
+
+// Auto-refresh functionality - SILENT background polling
+let memoryRefreshInterval;
+
+function startMemoryAutoRefresh() {
+  if (memoryRefreshInterval) {
+    clearInterval(memoryRefreshInterval);
+  }
+  memoryRefreshInterval = setInterval(() => {
+    if (document.body.classList.contains('log-open')) {
+      fetchMemoryLogs(false); // Silent polling - don't show status messages and don't scroll
+    }
+  }, 5000); // Increased to 5 seconds to reduce refresh frequency
+}
+
+function stopMemoryAutoRefresh() {
+  if (memoryRefreshInterval) {
+    clearInterval(memoryRefreshInterval);
+    memoryRefreshInterval = null;
+  }
+}
+
+// Log header click handler
+document.getElementById('logHeader').onclick = () => {
+    const body = document.body;
+    const chevron = document.getElementById('logChevron');
+    
+    body.classList.toggle('log-open');
+    
+    if (body.classList.contains('log-open')) {
+        chevron.style.transform = 'rotate(180deg)';
+        fetchMemoryLogs(true); // Show status on first load AND scroll to top
+        startMemoryAutoRefresh();
+    } else {
+        chevron.style.transform = 'rotate(0deg)';
+        stopMemoryAutoRefresh();
+    }
+};
 
 function sendMessage(){
   const text = input.value.trim();
@@ -356,12 +614,19 @@ function sendMessage(){
       removeThinkingIndicator();
       sendBtn.disabled = false; 
     });
+  
+  // Silently refresh memory logs after sending if panel is open
+  if (document.body.classList.contains('log-open')) {
+    setTimeout(() => {
+      fetchMemoryLogs(false); // Silent refresh - preserve scroll position
+    }, 1000);
+  }
 }
 
 async function pollResult(tid){
   const jwt = localStorage.getItem('jwt');
   try{
-    while(true){
+  while(true){
       await new Promise(r => setTimeout(r, 800));
       const r = await fetch(`${GW}/a2a/tasks/status/${tid}`, {
         headers: { 'Authorization': `Bearer ${jwt}` }
@@ -371,11 +636,17 @@ async function pollResult(tid){
       if(st.state === 'done'){
         const ans = st.result.choices?.[0]?.message?.content || JSON.stringify(st.result);
         
-        // Remove thinking indicator and show real response
         removeThinkingIndicator();
         appendMessage(activeRole, ans);
         log(`${activeRole} responded`);
         sendBtn.disabled = false;
+        
+        // Silently refresh memory logs after response
+        if (document.body.classList.contains('log-open')) {
+          setTimeout(() => {
+            fetchMemoryLogs(false); // Silent refresh - preserve scroll position
+          }, 500);
+        }
         break;
       } else if(st.state === 'error'){
         log('Upstream error: ' + JSON.stringify(st.result));
@@ -399,18 +670,10 @@ input.addEventListener('keydown', e => {
   }
 });
 
-document.getElementById('logHeader').onclick = () => {
-    const body = document.body;
-    const chevron = document.getElementById('logChevron');
-    
-    body.classList.toggle('log-open');
-    
-    // Rotate chevron to indicate state
-    if (body.classList.contains('log-open')) {
-        chevron.style.transform = 'rotate(180deg)';
-    } else {
-        chevron.style.transform = 'rotate(0deg)';
-    }
+// Manual refresh button - this one DOES show status AND scrolls to top
+document.getElementById('refreshMemory').onclick = (e) => {
+    e.stopPropagation();
+    fetchMemoryLogs(true); // Show status when manually refreshed AND scroll to top
 };
 </script>
 </body>
