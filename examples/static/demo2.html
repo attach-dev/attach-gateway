@@ -2,8 +2,7 @@
 <!--
   Attach Gateway demo UI
   ----------------------
-    1. Open browser dev‑tools and run:
-       localStorage.setItem('jwt', '<YOUR_TOKEN>')
+    1. Click the "Sign in with Attach" button
     2. In another three terminals:
        $ uvicorn main:app --port 8080
        $ uvicorn examples.agents.planner:app --port 8100
@@ -20,6 +19,7 @@
 <meta charset="utf-8" />
 <title>Attach Gateway Demo</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms@0.5.9"></script>
+<script src="https://cdn.auth0.com/js/auth0-spa-js/2.6/auth0-spa-js.production.js"></script>
 <style>
   body {font-family: system-ui, sans-serif;}
   
@@ -119,8 +119,10 @@
 </style>
 </head>
 <body class="bg-gray-50 flex flex-col min-h-screen">
-<header class="bg-white shadow sticky top-0 z-10">
+<header class="bg-white shadow sticky top-0 z-10 relative">
   <div class="max-w-4xl mx-auto py-4 text-center text-xl font-semibold text-gray-700">Attach Gateway Demo</div>
+  <button id="signinBtn"  class="absolute right-4 top-2 px-3 py-1 bg-blue-600 text-white rounded-md text-sm">Sign in with Attach</button>
+  <button id="signoutBtn" class="hidden  absolute right-4 top-2 px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-sm">Sign out</button>
 </header>
 <main class="flex-1 overflow-y-auto scroll-smooth max-w-4xl mx-auto w-full p-4 pb-32 bg-white border border-gray-300" id="transcript">
   <!-- messages appended here -->
@@ -149,7 +151,35 @@
   </div>
   <div id="logs" class="overflow-auto px-2 pb-1"></div>
 </div>
-<script>
+<script type="module">
+const signinBtn  = document.getElementById('signinBtn');
+const signoutBtn = document.getElementById('signoutBtn');
+
+const auth0 = await createAuth0Client({
+  domain:   "YOUR_DOMAIN.auth0.com",
+  clientId: "YOUR_CLIENT_ID",
+  audience: "ollama-local",
+  cacheLocation: "localstorage",
+  useRefreshTokens: true,
+});
+
+if (window.location.search.includes("code=")) {
+  await auth0.handleRedirectCallback();
+  window.history.replaceState({}, document.title, "/demo2.html");
+}
+
+async function ensureToken() {
+  return await auth0.getTokenSilently({ authorizationParams:{ scope:"openid profile email" }});
+}
+
+signinBtn.onclick  = () => auth0.loginWithRedirect({ authorizationParams:{ scope:"openid profile email offline_access" }});
+signoutBtn.onclick = () => auth0.logout({ logoutParams:{ returnTo: window.location.origin + "/demo2.html" }});
+
+if (await auth0.isAuthenticated()) {
+  signinBtn.classList.add("hidden");
+  signoutBtn.classList.remove("hidden");
+}
+
 const transcript = document.getElementById('transcript');
 const logs = document.getElementById('logs');
 const input = document.getElementById('chatInput');
@@ -340,9 +370,10 @@ function removeThinkingIndicator() {
 // Memory logs functionality - SILENT polling
 async function fetchMemoryLogs(showStatus = true) {
   try {
+    const jwt = await ensureToken();
     const response = await fetch(`${GW}/mem/events?limit=10`, {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('jwt')}`
+        'Authorization': `Bearer ${jwt}`
       }
     });
     
@@ -582,13 +613,7 @@ function sendMessage(){
   autoGrow.call(input);
   sendBtn.disabled = true;
   
-  const jwt = localStorage.getItem('jwt');
-  if(!jwt){ 
-    log('Error: localStorage.jwt missing'); 
-    removeThinkingIndicator();
-    sendBtn.disabled = false; 
-    return; 
-  }
+  const jwt = await ensureToken();
   
   const body = {
     input: {
@@ -624,7 +649,7 @@ function sendMessage(){
 }
 
 async function pollResult(tid){
-  const jwt = localStorage.getItem('jwt');
+  const jwt = await ensureToken();
   try{
   while(true){
       await new Promise(r => setTimeout(r, 800));
