@@ -19,7 +19,17 @@
 <meta charset="utf-8" />
 <title>Attach Gateway Demo</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
-<script src="https://cdn.auth0.com/js/auth0-spa-js/2.6/auth0-spa-js.production.js"></script>
+<script src="./js/auth0-spa-js@2.1.3.js"></script>
+<script>
+  // Debug what Auth0 library exposes
+  console.log('🔍 Available Auth0 properties:', Object.keys(window).filter(k => k.toLowerCase().includes('auth')));
+  console.log('🔍 Window.auth0:', window.auth0);
+  console.log('🔍 Window.createAuth0Client:', window.createAuth0Client);
+  if (window.auth0) {
+    console.log('🔍 Auth0 object properties:', Object.keys(window.auth0));
+    console.log('🔍 Auth0.createAuth0Client:', window.auth0.createAuth0Client);
+  }
+</script>
 <style>
   body {font-family: system-ui, sans-serif;}
   
@@ -156,17 +166,55 @@
   const signoutBtn = document.getElementById('signoutBtn');
   const GW = location.protocol + '//' + location.hostname + ':8080';
   
-  // Initialize Auth0 - wait for library to load
+  // Initialize Auth0 - declare auth0Client properly
   let auth0Client = null;
   
   async function initAuth0() {
+    console.log('🔍 Starting Auth0 initialization...');
+    
     try {
-      // Simple wait for Auth0 library
-      while (!window.createAuth0Client) {
+      console.log('🔍 Fetching auth config...');
+      const cfg = await fetch(`${GW}/auth/config`).then(r => r.json());
+      console.log('✅ Auth config received:', cfg);
+      
+      // Wait for Auth0 library to load with better error handling
+      console.log('🔍 Waiting for Auth0 library...');
+      let attempts = 0;
+      const maxAttempts = 50;
+      
+      while (attempts < maxAttempts) {
+        if (typeof window.auth0?.createAuth0Client === 'function') {
+          console.log('✅ Auth0 library found');
+          break;
+        }
         await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+        
+        // Log progress every 10 attempts
+        if (attempts % 10 === 0) {
+          console.log(`🔍 Still waiting for Auth0 library... (attempt ${attempts}/${maxAttempts})`);
+        }
       }
       
-      auth0Client = await window.createAuth0Client({
+      if (typeof window.auth0?.createAuth0Client !== 'function') {
+        console.error('❌ Auth0 library failed to load after', maxAttempts, 'attempts');
+        console.error('❌ Available on window:', Object.keys(window).filter(k => k.includes('auth') || k.includes('Auth')));
+        
+        // Show user-friendly error
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = `
+          position: fixed; top: 20px; left: 50%; transform: translateX(-50%); 
+          background: #f56565; color: white; padding: 12px 20px; 
+          border-radius: 8px; z-index: 9999; font-family: system-ui;
+        `;
+        errorDiv.textContent = 'Auth0 library failed to load. Please refresh the page or check your internet connection.';
+        document.body.appendChild(errorDiv);
+        
+        return;
+      }
+      
+      console.log('🔍 Creating Auth0 client...');
+      auth0Client = await window.auth0.createAuth0Client({
         domain: cfg.domain,
         clientId: cfg.client_id,
         authorizationParams: {
@@ -176,85 +224,99 @@
         cacheLocation: 'localstorage',
         useRefreshTokens: true,
       });
-  
+      console.log('✅ Auth0 client created successfully');
+      
+      // Handle redirect callback
       if (window.location.search.includes("code=")) {
         await auth0Client.handleRedirectCallback();
         window.history.replaceState({}, document.title, "/demo2.html");
       }
-  
+      
+      // Update UI based on auth state
       if (await auth0Client.isAuthenticated()) {
         signinBtn.classList.add("hidden");
         signoutBtn.classList.remove("hidden");
       }
       
-      console.log('Auth0 initialized successfully');
+      console.log('✅ Auth0 initialization complete');
     } catch (error) {
-      console.error('Auth0 initialization failed:', error);
+      console.error('❌ Auth0 initialization failed:', error);
+      
+      // Show user-friendly error
+      const errorDiv = document.createElement('div');
+      errorDiv.style.cssText = `
+        position: fixed; top: 20px; left: 50%; transform: translateX(-50%); 
+        background: #f56565; color: white; padding: 12px 20px; 
+        border-radius: 8px; z-index: 9999; font-family: system-ui;
+      `;
+      errorDiv.textContent = `Auth0 initialization failed: ${error.message}`;
+      document.body.appendChild(errorDiv);
     }
   }
   
-  // Initialize Auth0
+  // Start Auth0 initialization
   initAuth0();
-  async function ensureToken() {
-  if (!auth0Client) {
-    throw new Error('Auth0 not initialized. Please refresh the page.');
-  }
   
-  try {
-    const token = await auth0Client.getTokenSilently({ 
-      authorizationParams: { scope: "openid profile email" }
-    });
-    
-    if (!token || typeof token !== 'string') {
-      throw new Error('Invalid token received');
+  async function ensureToken() {
+    if (!auth0Client) {
+      throw new Error('Auth0 not initialized. Please refresh the page.');
     }
     
-    return token;
-  } catch (error) {
-    console.error('Token fetch failed:', error);
-    await auth0Client.loginWithRedirect();
-    throw error;
-  }
-}
-
-signinBtn.onclick = async () => {
-  if (!auth0Client) {
-    alert('Authentication not available. Please refresh the page.');
-    return;
-  }
-  
-  try {
-    await auth0Client.loginWithRedirect({ 
-      authorizationParams: { 
-        scope: "openid profile email offline_access",
-        prompt: "login"
+    try {
+      const token = await auth0Client.getTokenSilently({ 
+        authorizationParams: { scope: "openid profile email" }
+      });
+      
+      if (!token || typeof token !== 'string') {
+        throw new Error('Invalid token received');
       }
-    });
-  } catch (error) {
-    console.error('Login failed:', error);
-  }
-};
-
-signoutBtn.onclick = async () => {
-  if (!auth0Client) {
-    alert('Authentication not available. Please refresh the page.');
-    return;
+      
+      return token;
+    } catch (error) {
+      console.error('Token fetch failed:', error);
+      await auth0Client.loginWithRedirect();
+      throw error;
+    }
   }
   
-  try {
-    localStorage.removeItem('pinned');
-    systemLogEntries.length = 0;
+  signinBtn.onclick = async () => {
+    if (!auth0Client) {
+      alert('Authentication not available. Please refresh the page.');
+      return;
+    }
     
-    await auth0Client.logout({ 
-      logoutParams: { 
-        returnTo: window.location.origin + "/demo2.html",
-        federated: true
-      }
-    });
-  } catch (error) {
-    console.error('Logout failed:', error);
-  }
-};
+    try {
+      await auth0Client.loginWithRedirect({ 
+        authorizationParams: { 
+          scope: "openid profile email offline_access",
+          prompt: "login"
+        }
+      });
+    } catch (error) {
+      console.error('Login failed:', error);
+    }
+  };
+  
+  signoutBtn.onclick = async () => {
+    if (!auth0Client) {
+      alert('Authentication not available. Please refresh the page.');
+      return;
+    }
+    
+    try {
+      localStorage.removeItem('pinned');
+      systemLogEntries.length = 0;
+      
+      await auth0Client.logout({ 
+        logoutParams: { 
+          returnTo: window.location.origin + "/demo2.html",
+          federated: true
+        }
+      });
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
 
 const transcript = document.getElementById('transcript');
 const logs = document.getElementById('logs');

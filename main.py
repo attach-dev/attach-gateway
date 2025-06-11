@@ -135,22 +135,6 @@ middlewares = [
 ]
 
 app = FastAPI(title="attach-gateway", middleware=middlewares)
-app.include_router(a2a_router, prefix="/a2a")
-app.include_router(logs_router)
-app.include_router(mem_router)  # Add the memory router
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:9000"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-    allow_credentials=True,
-)
-
-# catch-all proxy (incl. /api/chat)
-app.add_api_route(
-    "/{path:path}", proxy_to_engine, methods=["GET", "POST", "PUT", "PATCH"]
-)
-
 @app.get("/auth/config")
 async def auth_config():
     return {
@@ -158,3 +142,15 @@ async def auth_config():
         "client_id": os.getenv("AUTH0_CLIENT"),
         "audience": os.getenv("OIDC_AUD"),
     }
+app.include_router(a2a_router, prefix="/a2a")
+app.include_router(logs_router)
+app.include_router(mem_router)  # Add the memory router
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:9000", "http://127.0.0.1:9000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True,
+)
+
+
