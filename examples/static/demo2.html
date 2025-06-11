@@ -143,7 +143,7 @@
       <button data-role="planner" class="px-3 py-1 bg-blue-100 text-blue-700" id="plannerTab">Ask Planner</button>
       <button data-role="coder" class="px-3 py-1 text-gray-600 hover:bg-gray-50" id="coderTab">Ask Coder</button>
     </div>
-    <textarea id="chatInput" rows="1" class="flex-1 resize-none border rounded-md p-2 text-sm focus:outline-none" placeholder="Type a message..."></textarea>
+    <textarea id="chatInput" rows="1" class="flex-1 resize-none border rounded-md p-2 text-sm focus:outline-none" placeholder="Type a message... (sign in required to send)"></textarea>
     <button id="sendBtn" class="p-2 text-blue-700 hover:text-blue-800">
       <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3l5 9-5 9z"/></svg>
     </button>
@@ -236,6 +236,7 @@
       if (await auth0Client.isAuthenticated()) {
         signinBtn.classList.add("hidden");
         signoutBtn.classList.remove("hidden");
+        document.getElementById('chatInput').placeholder = "Type a message...";
       }
       
       console.log('✅ Auth0 initialization complete');
@@ -719,26 +720,66 @@ function stopMemoryAutoRefresh() {
   }
 }
 
-// Log header click handler
-document.getElementById('logHeader').onclick = () => {
-    const body = document.body;
-    const chevron = document.getElementById('logChevron');
-    
-    body.classList.toggle('log-open');
-    
-    if (body.classList.contains('log-open')) {
-        chevron.style.transform = 'rotate(180deg)';
-        fetchMemoryLogs(true); // Show status on first load AND scroll to top
-        startMemoryAutoRefresh();
-    } else {
-        chevron.style.transform = 'rotate(0deg)';
-        stopMemoryAutoRefresh();
+// Helper function to check auth and show friendly prompt
+async function checkAuthWithPrompt(action = 'use this feature') {
+  if (!auth0Client) {
+    showAuthPrompt(`Please sign in to ${action}`);
+    return false;
+  }
+  
+  try {
+    const isAuthenticated = await auth0Client.isAuthenticated();
+    if (!isAuthenticated) {
+      showAuthPrompt(`Please sign in to ${action}`);
+      return false;
     }
-};
+    return true;
+  } catch (error) {
+    showAuthPrompt(`Please sign in to ${action}`);
+    return false;
+  }
+}
 
+// Show a friendly, non-intrusive auth prompt
+function showAuthPrompt(message) {
+  const prompt = document.createElement('div');
+  prompt.style.cssText = `
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%); 
+    background: #3b82f6; color: white; padding: 12px 20px; 
+    border-radius: 8px; z-index: 9999; font-family: system-ui;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    display: flex; align-items: center; gap: 12px;
+  `;
+  prompt.innerHTML = `
+    <span>${message}</span>
+    <button onclick="this.parentElement.remove(); document.getElementById('signinBtn').click();" 
+            style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+      Sign In
+    </button>
+    <button onclick="this.parentElement.remove();" 
+            style="background: none; border: none; color: white; cursor: pointer; font-size: 16px; padding: 0 4px;">
+      ×
+    </button>
+  `;
+  document.body.appendChild(prompt);
+  
+  // Auto-remove after 5 seconds
+  setTimeout(() => {
+    if (prompt.parentElement) {
+      prompt.remove();
+    }
+  }, 5000);
+}
+
+// Update sendMessage function
 async function sendMessage(){
   const text = input.value.trim();
   if(!text) return;
+  
+  // Check auth before sending
+  if (!(await checkAuthWithPrompt('send messages'))) {
+    return;
+  }
   
   appendMessage(activeRole, text, true);
   log(`You -> ${activeRole}: ${text}`);
@@ -832,10 +873,36 @@ input.addEventListener('keydown', e => {
   }
 });
 
-// Manual refresh button - this one DOES show status AND scrolls to top
-document.getElementById('refreshMemory').onclick = (e) => {
+// Update log header click handler
+document.getElementById('logHeader').onclick = async () => {
+    const body = document.body;
+    const chevron = document.getElementById('logChevron');
+    
+    // If trying to open logs, check auth first
+    if (!body.classList.contains('log-open')) {
+      if (!(await checkAuthWithPrompt('view memory logs'))) {
+        return;
+      }
+    }
+    
+    body.classList.toggle('log-open');
+    
+    if (body.classList.contains('log-open')) {
+        chevron.style.transform = 'rotate(180deg)';
+        fetchMemoryLogs(true);
+        startMemoryAutoRefresh();
+    } else {
+        chevron.style.transform = 'rotate(0deg)';
+        stopMemoryAutoRefresh();
+    }
+};
+
+// Update manual refresh button
+document.getElementById('refreshMemory').onclick = async (e) => {
     e.stopPropagation();
-    fetchMemoryLogs(true); // Show status when manually refreshed AND scroll to top
+    if (await checkAuthWithPrompt('refresh memory logs')) {
+      fetchMemoryLogs(true);
+    }
 };
 </script>
 </body>
