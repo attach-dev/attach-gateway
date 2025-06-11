@@ -154,6 +154,7 @@
 <script type="module">
   const signinBtn  = document.getElementById('signinBtn');
   const signoutBtn = document.getElementById('signoutBtn');
+  const GW = location.protocol + '//' + location.hostname + ':8080';
   
   // Initialize Auth0 - wait for library to load
   let auth0Client = null;
@@ -166,14 +167,14 @@
       }
       
       auth0Client = await window.createAuth0Client({
-        domain: "dev-y0k5q441rmf3e07q.us.auth0.com",
-        clientId: "mLi3AnghPY37YThLDURSr2JSTUkJK9Go",
-        audience: "ollama-local",
-        cacheLocation: "memory",
+        domain: cfg.domain,
+        clientId: cfg.client_id,
+        authorizationParams: {
+          audience: cfg.audience,
+          redirect_uri: window.location.origin + '/demo2.html'
+        },
+        cacheLocation: 'localstorage',
         useRefreshTokens: true,
-        useCookiesForTransactions: true,
-        sessionCheckExpiryDays: 1,
-        leeway: 60
       });
   
       if (window.location.search.includes("code=")) {
