@@ -13,3 +13,5 @@ This example uses the **Docker-based** Weaviate server started by
 ```bash
 source .venv/bin/activate
 python examples/demo_view_memory.py
+
+```

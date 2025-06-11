@@ -42,6 +42,10 @@ export WEAVIATE_URL=http://127.0.0.1:6666
 # 3) run gateway
 uvicorn main:app --port 8080 &
 
+# The gateway exposes your Auth0 credentials for the demo UI at
+# `/auth/config`. The values are read from `AUTH0_DOMAIN`,
+# `AUTH0_CLIENT` and `OIDC_AUD`.
+
 # 4) make a protected Ollama call via the gateway
 curl -H "Authorization: Bearer $JWT" \
      -d '{"model":"tinyllama","prompt":"hello"}' \
