@@ -48,7 +48,7 @@ flowchart LR
 1. **Auth** – verify JWT (OIDC) / HMAC.
 2. **Session** – `session_id = sha256(user.sub + user‑agent)`
 3. **Headers out** – `X-Attach-User`, `X-Attach-Session`, `X-Attach-Agent?`.
-4. **Mirror** – non‑blocking stream → memory stub.
+4. **Mirror** – non‑blocking stream → memory stub (also accepts `/v1/logs`).
 5. **Proxy** – reverse‑proxy to target engine.
 
 ---
@@ -95,8 +95,15 @@ export OLLAMA_TOKEN=$(./scripts/dev_login.sh)
 # Make a protected request via the gateway (8080)
 curl -H "Authorization: Bearer $OLLAMA_TOKEN" \
      -d '{"prompt":"Hello"}' \
-     http://localhost:8080/api/chat
+    http://localhost:8080/api/chat
 # Gateway ➜ validates JWT ➜ stamps X‑Attach‑User/Session ➜ proxies to Ollama :11434
+```
+
+### 5.4 Task queue schemes
+
+```
+http://<service>         # default HTTP call
+temporal://<Workflow>    # execute Temporal workflow
 ```
 
 ---

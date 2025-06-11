@@ -13,7 +13,8 @@ LLM engines such as **Ollama** or **vLLM** ship with **zero auth**.  Agent‑to�
 *   ✅ Verifies **OIDC / JWT** or **DID‑JWT**
 *   ✅ Stamps `X‑ATTACH‑User` + `X‑ATTACH‑Session` headers so every downstream agent/tool sees the same identity
 *   ✅ Implements `/a2a/tasks/send` + `/tasks/status` for Google A2A & OpenHands hand‑off
-*   ✅ Mirrors prompts & responses to a memory backend (Weaviate embedded by default)
+*   ✅ Mirrors prompts & responses to a memory backend (Weaviate Docker container by default)
+*   ✅ Workflow traces (Temporal)
 
 Run it next to any model server and get secure, shareable context in under 1 minute.
 
@@ -26,9 +27,11 @@ Run it next to any model server and get secure, shareable context in under 1 mi
 
 git clone https://github.com/attach-dev/attach-gateway.git && cd attach-gateway
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt weaviate-client[embedded]
+pip install -r requirements.txt
 
-# 1) start embedded memory (background tab)
+
+# 1) start memory in Docker (background tab)
+
 python script/start_weaviate.py &
 
 # 2) export your short‑lived token
@@ -41,10 +44,22 @@ export WEAVIATE_URL=http://127.0.0.1:6666
 # 3) run gateway
 uvicorn main:app --port 8080 &
 
+# The gateway exposes your Auth0 credentials for the demo UI at
+# `/auth/config`. The values are read from `AUTH0_DOMAIN`,
+# `AUTH0_CLIENT` and `OIDC_AUD`.
+
 # 4) make a protected Ollama call via the gateway
 curl -H "Authorization: Bearer $JWT" \
      -d '{"model":"tinyllama","prompt":"hello"}' \
-     http://localhost:8080/api/chat | jq .
+    http://localhost:8080/api/chat | jq .
+```
+
+In another terminal, try the Temporal demo:
+
+```bash
+pip install temporalio  # optional workflow engine
+python examples/temporal_adapter/worker.py &
+python examples/temporal_adapter/client.py
 ```
 
 You should see a JSON response plus `X‑ATTACH‑Session‑Id` header – proof the pipeline works.
@@ -72,7 +87,7 @@ flowchart TD
     end
 
     subgraph Memory
-        WV["Weaviate (embedded)\nclass MemoryEvent"]
+        WV["Weaviate (Docker)\nclass MemoryEvent"]
     end
 
     subgraph Engine
@@ -110,10 +125,12 @@ flowchart TD
 
 ---
 
-## Live two‑agent demo (no Docker)
+## Live two‑agent demo
 
 ```bash
-# pane 1 – memory
+
+# pane 1 – memory (Docker)
+
 python script/start_weaviate.py
 
 # pane 2 – gateway
@@ -139,7 +156,7 @@ Type a request like *“Write Python to sort a list.”*  The browser shows:
 
 | Path | Purpose |
 |------|---------|
-| `auth/` | OIDC & (soon) DID‑JWT verifiers |
+| `auth/` | OIDC & DID‑JWT verifiers |
 | `middleware/` | JWT middleware, session header, mirror trigger |
 | `a2a/` | `/tasks/send` & `/tasks/status` routes |
 | `mem/` | pluggable memory writers (`weaviate.py`, `null.py`) |
@@ -147,6 +164,32 @@ Type a request like *“Write Python to sort a list.”*  The browser shows:
 | `examples/static/` | `demo.html` chat page |
 
 ---
+
+### Auth core
+
+`auth.verify_jwt()` accepts three token formats and routes them automatically:
+
+1. Standard OIDC JWTs
+2. `did:key` tokens
+3. `did:pkh` tokens
+
+Example DID-JWT request:
+```bash
+curl -X POST /v1/resource \
+     -H "Authorization: Bearer did:key:z6Mki...<sig>.<payload>.<sig>"
+```
+
+## 💾 Memory: logs
+
+Send Sakana-formatted logs to the gateway and they will be stored as
+`MemoryEvent` objects in Weaviate.
+
+```bash
+curl -X POST /v1/logs \
+     -H "Authorization: Bearer $JWT" \
+     -d '{"run_id":"abc","level":"info","message":"hi"}'
+# => HTTP/1.1 202 Accepted
+```
 
 ## Roadmap
 

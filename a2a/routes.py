@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 import uuid
 from typing import Any
@@ -9,6 +10,8 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
+from mem import write as mem_write
+
 router = APIRouter()
 
 # --------------------------------------------------------------------------- #
@@ -16,15 +19,39 @@ router = APIRouter()
 # --------------------------------------------------------------------------- #
 # {task_id: {"state": str, "result": Any | None, "created": float}}
 _TASKS: dict[str, dict[str, Any]] = {}
-_LOCK = asyncio.Lock()             # cheap protection for concurrent writers
-_TTL = 3600                        # seconds before we evict old tasks
+_LOCK = asyncio.Lock()  # cheap protection for concurrent writers
+_TTL = 3600  # seconds before we evict old tasks
 
 
 def _new_id() -> str:
     return uuid.uuid4().hex[:12]
 
 
-async def _forward_call(body: dict[str, Any], headers: dict[str, str], task_id: str) -> None:
+async def _execute_temporal(target: str, payload: dict[str, Any], task_id: str) -> Any:
+    try:
+        from temporalio.client import Client
+    except Exception as exc:  # pragma: no cover - optional dep
+        raise RuntimeError("temporalio not installed") from exc
+
+    workflow = target.removeprefix("temporal://")
+    url = os.getenv("TEMPORAL_URL", "localhost:7233")
+    client = await Client.connect(url)
+    result = await client.execute_workflow(
+        workflow,
+        payload.get("messages", []),
+        id=task_id,
+        task_queue=os.getenv("TEMPORAL_QUEUE", "attach-gateway"),
+    )
+    return result
+
+
+async def _forward_call(
+    body: dict[str, Any],
+    headers: dict[str, str],
+    task_id: str,
+    sid: str,
+    sub: str,
+) -> None:
     """
     Fire-and-forget helper that forwards the wrapped `input` to the chat engine
     and stores the result (or error) in `_TASKS[task_id]`.
@@ -34,17 +61,44 @@ async def _forward_call(body: dict[str, Any], headers: dict[str, str], task_id: 
     async with _LOCK:
         _TASKS[task_id]["state"] = "in_progress"
 
+    await mem_write(
+        {
+            "timestamp": time.time(),
+            "session_id": sid,
+            "user": sub,
+            "task_id": task_id,
+            "event": "task_sent",
+            "payload": body.get("input"),
+        }
+    )
+
     try:
-        async with httpx.AsyncClient(timeout=60) as cli:
-            resp = await cli.post(target, json=body["input"], headers=headers)
-        result: Any = resp.json()
-        state = "done"
-    except Exception as exc:       # noqa: BLE001 – surfacing any network/json error
+        if target.startswith("temporal://"):
+            result = await _execute_temporal(target, body["input"], task_id)
+            state = "done"
+        else:
+            async with httpx.AsyncClient(timeout=60) as cli:
+                resp = await cli.post(target, json=body["input"], headers=headers)
+            result = resp.json()
+            state = "done"
+    except Exception as exc:  # noqa: BLE001 – surfacing any network/json error
         result = {"detail": str(exc)}
         state = "error"
 
     async with _LOCK:
         _TASKS[task_id].update(state=state, result=result)
+
+    await mem_write(
+        {
+            "timestamp": time.time(),
+            "session_id": sid,
+            "user": sub,
+            "task_id": task_id,
+            "event": "task_result",
+            "state": state,
+            "result": result,
+        }
+    )
 
 
 async def _evict_expired() -> None:
@@ -79,7 +133,16 @@ async def tasks_send(req: Request, bg: BackgroundTasks):
     }
     headers = {k: v for k, v in base_headers.items() if v is not None}
 
-    bg.add_task(_forward_call, body, headers, task_id)
+    sid = getattr(req.state, "sid", "") or req.headers.get("x-attach-session", "")
+    sub = getattr(req.state, "sub", "")
+    bg.add_task(
+        _forward_call,
+        body,
+        headers,
+        task_id,
+        sid,
+        sub,
+    )
     bg.add_task(_evict_expired)
 
     return {"task_id": task_id, "state": "queued"}
@@ -89,5 +152,7 @@ async def tasks_send(req: Request, bg: BackgroundTasks):
 async def tasks_status(task_id: str):
     task = _TASKS.get(task_id)
     if not task:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="unknown task")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="unknown task"
+        )
     return JSONResponse(task)

@@ -1,128 +1,710 @@
 <!DOCTYPE html>
-<html>
+<!--
+  Attach Gateway demo UI
+  ----------------------
+    1. Click the "Sign in with Attach" button
+    2. In another three terminals:
+       $ uvicorn main:app --port 8080
+       $ uvicorn examples.agents.planner:app --port 8100
+       $ uvicorn examples.agents.coder:app   --port 8101
+    3. Refresh this page, pick a tab ("Ask Planner" / "Ask Coder"),
+       type a message. Watch logs slide up from the bottom.
+
+  The page calls /a2a/tasks/send on the gateway, which proxies to the
+  chosen agent and records every hop in Weaviate – the JSON events are
+  appended live in the log drawer for clarity.
+  
+-->
+<html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>UMP Gateway Demo</title>
+<title>Attach Gateway Demo</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms@0.5.9"></script>
+<script src="https://cdn.auth0.com/js/auth0-spa-js/2.6/auth0-spa-js.production.js"></script>
 <style>
- body{margin:0;font:14px/1.4 system-ui;background:#d9d9d9}
- #wrap{padding:20px}
- h1{margin:0 auto 10px;width:640px;text-align:center;border:1px solid #fff;
-    background:#fff;border-radius:8px;font-weight:600}
- .col{float:left;width:48%;margin-right:2%;background:#fff;
-      border-radius:8px;min-height:520px;padding:10px;box-sizing:border-box}
- .col:last-child{margin-right:0}
- .msg{white-space:pre-wrap;font-family:monospace;margin:4px 0}
- .user{color:#333}
- .bot{color:#006dcc}
- #sys{background:#fff;border-radius:8px;height:120px;overflow:auto;padding:6px}
- .send{display:flex;margin-top:6px}
- textarea{flex:1;font:14px monospace;height:42px}
- button{width:38px;border:none;background:#006dcc;color:#fff;border-radius:4px}
- #signin{margin-bottom:10px;padding:6px 14px;background:#006dcc;color:#fff;
-         border:none;border-radius:6px;font-weight:600;cursor:pointer}
+  body {font-family: system-ui, sans-serif;}
+  
+  /* System Logs panel - always fixed to bottom */
+  #logPanel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    background-color: #1f2937; /* bg-gray-800 */
+    transition: all .2s ease-in-out;
+    /* Default state: only show header */
+    height: 2.5rem; /* Fixed height for header only */
+    overflow: hidden;
+  }
+  
+  /* When log panel is open, expand to show content */
+  body.log-open #logPanel {
+    height: 12rem; /* Expanded height */
+  }
+  
+  /* Log content styling */
+  #logs {
+    height: 9.5rem; /* Total height minus header height */
+    opacity: 0;
+    transition: opacity .2s ease-in-out .1s; /* Slight delay for smooth appearance */
+  }
+  
+  body.log-open #logs {
+    opacity: 1;
+  }
+  
+  /* Chat input bar - positioned above the log panel */
+  #inputBar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 2.5rem; /* Height of collapsed log panel */
+    z-index: 20;
+    transition: bottom .2s ease-in-out;
+  }
+  
+  /* When log panel is open, move chat bar up */
+  body.log-open #inputBar {
+    bottom: 12rem; /* Height of expanded log panel */
+  }
+  
+  /* Main transcript area - ensure it has bottom padding */
+  #transcript {
+    padding-bottom: 8rem; /* Space for chat bar + collapsed log panel */
+    transition: padding-bottom .2s ease-in-out;
+  }
+  
+  /* When log panel is open, add more bottom padding to transcript */
+  body.log-open #transcript {
+    padding-bottom: 18rem; /* Space for chat bar + expanded log panel */
+  }
+  
+  /* Ensure log header is always visible and clickable */
+  #logHeader {
+    height: 2.5rem;
+    flex-shrink: 0;
+  }
+  
+  /* Thinking indicator styles */
+  .thinking-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-style: italic;
+    color: #6b7280; /* text-gray-500 */
+  }
+  
+  .spinner {
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid #e5e7eb; /* border-gray-200 */
+    border-top: 2px solid #3b82f6; /* border-blue-500 */
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  /* Ensure text wraps properly in message bubbles */
+  .message-content {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    white-space: pre-wrap; /* Preserve line breaks and wrap text */
+    max-width: 100%;
+  }
 </style>
 </head>
-<body>
-<div id="wrap">
-  <h1>UMP Gateway Demo</h1>
-
-  <button id="signin">Sign in with UMP.dev</button>
-
-  <div id="planner"  class="col"><h3>Planner Agent</h3></div>
-  <div id="coder"    class="col"><h3>Coder Agent</h3></div>
-
-  <div style="clear:both"></div>
-
-  <div class="send">
-    <textarea id="p_input" placeholder="Ask the Planner…"></textarea>
-    <button onclick="sendPlanner()">➤</button>
+<body class="bg-gray-50 flex flex-col min-h-screen">
+<header class="bg-white shadow sticky top-0 z-10 relative">
+  <div class="max-w-4xl mx-auto py-4 text-center text-xl font-semibold text-gray-700">Attach Gateway Demo</div>
+  <button id="signinBtn"  class="absolute right-4 top-2 px-3 py-1 bg-blue-600 text-white rounded-md text-sm">Sign in with Attach</button>
+  <button id="signoutBtn" class="hidden  absolute right-4 top-2 px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-sm">Sign out</button>
+</header>
+<main class="flex-1 overflow-y-auto scroll-smooth max-w-4xl mx-auto w-full p-4 pb-32 bg-white border border-gray-300" id="transcript">
+  <!-- messages appended here -->
+</main>
+<div class="fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 z-20" id="inputBar">
+  <div class="max-w-4xl mx-auto p-2 flex items-end gap-2">
+    <div id="tabs" class="flex border rounded-md overflow-hidden text-sm">
+      <button data-role="planner" class="px-3 py-1 bg-blue-100 text-blue-700" id="plannerTab">Ask Planner</button>
+      <button data-role="coder" class="px-3 py-1 text-gray-600 hover:bg-gray-50" id="coderTab">Ask Coder</button>
+    </div>
+    <textarea id="chatInput" rows="1" class="flex-1 resize-none border rounded-md p-2 text-sm focus:outline-none" placeholder="Type a message..."></textarea>
+    <button id="sendBtn" class="p-2 text-blue-700 hover:text-blue-800">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3l5 9-5 9z"/></svg>
+    </button>
   </div>
-
-  <div class="send">
-    <textarea id="c_input" placeholder="(Optional) Talk to Coder directly…"></textarea>
-    <button onclick="sendCoder()">➤</button>
-  </div>
-
-  <h3>System/Memory Logs</h3>
-  <div id="sys"></div>
 </div>
+<div id="logPanel" class="fixed bottom-0 inset-x-0 text-gray-100 text-xs font-mono z-30">
+  <div id="logHeader" class="flex items-center justify-between px-2 py-1 cursor-pointer border-t border-gray-700 h-10">
+    <span>Memory Logs</span>
+    <div class="flex items-center gap-2">
+      <button id="refreshMemory" class="text-blue-400 hover:text-blue-300 text-xs">↻ Refresh</button>
+      <svg id="logChevron" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transform transition-transform duration-200" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/>
+      </svg>
+    </div>
+  </div>
+  <div id="logs" class="overflow-auto px-2 pb-1"></div>
+</div>
+<script type="module">
+const signinBtn  = document.getElementById('signinBtn');
+const signoutBtn = document.getElementById('signoutBtn');
+const GW = location.protocol + '//' + location.hostname + ':8080';
 
-<script>
-const GW = location.protocol + '//' + location.hostname + ':8080'; // gateway URL
-let jwt = localStorage.jwt || null;
+const cfg = await fetch(`${GW}/auth/config`).then(r => r.json());
+const auth0 = await createAuth0Client({
+  domain: cfg.domain,
+  clientId: cfg.client_id,
+  authorizationParams: {
+    audience: cfg.audience,
+    redirect_uri: window.location.origin + '/demo2.html'
+  },
+  cacheLocation: 'localstorage',
+  useRefreshTokens: true,
+});
 
-/* ---------- Auth0 login popup ---------- */
-document.getElementById('signin').onclick = async () => {
-  // Fetch public credentials from gateway
-  const config = await fetch(`${GW}/auth/config`).then(r => r.json());
+if (window.location.search.includes("code=")) {
+  await auth0.handleRedirectCallback();
+  window.history.replaceState({}, document.title, "/demo2.html");
+}
+
+async function ensureToken() {
+  return await auth0.getTokenSilently({ authorizationParams:{ scope:"openid profile email" }});
+}
+
+signinBtn.onclick  = () => auth0.loginWithRedirect({ authorizationParams:{ scope:"openid profile email offline_access" }});
+signoutBtn.onclick = () => auth0.logout({ logoutParams:{ returnTo: window.location.origin + "/demo2.html" }});
+
+if (await auth0.isAuthenticated()) {
+  signinBtn.classList.add("hidden");
+  signoutBtn.classList.remove("hidden");
+}
+
+const transcript = document.getElementById('transcript');
+const logs = document.getElementById('logs');
+const input = document.getElementById('chatInput');
+const plannerTab = document.getElementById('plannerTab');
+const coderTab = document.getElementById('coderTab');
+const sendBtn = document.getElementById('sendBtn');
+const logPanel = document.getElementById('logPanel');
+const inputBar = document.getElementById('inputBar');
+const PLANNER_URL = location.protocol + '//' + location.hostname + ':8100/api/chat';
+const CODER_URL = location.protocol + '//' + location.hostname + ':8101/api/chat';
+let activeRole = 'planner';
+let thinkingElement = null;
+
+// Track system logs and expanded states
+let systemLogEntries = [];
+let expandedEventIds = new Set();
+
+// Enhanced logging function that tracks entries with timestamps
+function logSimple(msg) {
+  const timestamp = new Date();
+  const entry = {
+    type: 'system',
+    timestamp: timestamp,
+    message: msg,
+    id: `system-${timestamp.getTime()}`
+  };
+  systemLogEntries.push(entry);
   
-  const auth0 = new URL(`https://${config.domain}/authorize`);
-  auth0.search = new URLSearchParams({
-     response_type: 'token',
-     client_id: config.client_id,
-     redirect_uri: location.href,
-     audience: config.audience,
-     scope: 'openid'
-  });
-  window.location = auth0.toString();
-};
-
-/* ---------- parse hash after login ---------- */
-if (location.hash.startsWith('#access_token=')) {
-  jwt = new URLSearchParams(location.hash.slice(1)).get('access_token');
-  localStorage.jwt = jwt;
-  location.hash = ''; // clean up
-}
-
-/* ---------- helpers ---------- */
-function append(id, cls, text){
-  const d=document.createElement('div');
-  d.className='msg '+cls; d.textContent=text;
-  document.getElementById(id).appendChild(d);
-  d.scrollIntoView({block:'end'});
-}
-async function postA2A(url, body){
-  const r = await fetch(url, {
-      method:'POST',
-      headers:{'Authorization':'Bearer '+jwt,'Content-Type':'application/json'},
-      body:JSON.stringify(body)});
-  return r.json();
-}
-async function poll(task){
-  let st;
-  while(true){
-    const r=await fetch(`${GW}/a2a/tasks/status/${task}`,{
-      headers:{'Authorization':'Bearer '+jwt}});
-    st = await r.json();
-    if(st.state==='done') return st.result;
-    await new Promise(res=>setTimeout(res,500));
+  // Keep only last 20 system logs to prevent memory buildup
+  if (systemLogEntries.length > 20) {
+    systemLogEntries = systemLogEntries.slice(-20);
+  }
+  
+  // If logs panel is open, refresh the display (preserve scroll for system logs)
+  if (document.body.classList.contains('log-open')) {
+    refreshLogsDisplay(false); // Don't scroll to top for system log additions
   }
 }
-/* ---------- senders ---------- */
-async function sendPlanner(){
-  const txt=document.getElementById('p_input').value; if(!txt) return;
-  append('planner','user','🗣 '+txt);
-  document.getElementById('p_input').value='';
-  const {task_id}=await postA2A(`${GW}/a2a/tasks/send`,{
-       input:{messages:[{role:'user',content:txt}],stream:false},
-       target_url:'http://127.0.0.1:8100/a2a/handle'});
-  const res=await poll(task_id);
-  append('coder','bot','🤖 '+res);
-}
-async function sendCoder(){
-  const txt=document.getElementById('c_input').value; if(!txt) return;
-  append('coder','user','🗣 '+txt);
-  document.getElementById('c_input').value='';
-  const {task_id}=await postA2A(`${GW}/a2a/tasks/send`,{
-       input:{messages:[{role:'user',content:txt}],stream:false},
-       target_url:'http://127.0.0.1:8101/a2a/handle'});
-  const res=await poll(task_id);
-  append('coder','bot','🤖 '+res);
+
+// Replace the old log function
+function log(msg) {
+  logSimple(msg);
 }
 
-/* ---------- live gateway log stream (Server-Sent Events) ---------- */
-const sse = new EventSource(`${GW}/logs/stream`);      // optional SSE route
-sse.onmessage = ev => { append('sys','',ev.data); };
+function switchTab(role){
+  activeRole = role;
+  plannerTab.classList.toggle('bg-blue-100', role === 'planner');
+  plannerTab.classList.toggle('text-blue-700', role === 'planner');
+  coderTab.classList.toggle('bg-blue-100', role === 'coder');
+  coderTab.classList.toggle('text-blue-700', role === 'coder');
+}
+
+plannerTab.onclick = () => switchTab('planner');
+coderTab.onclick = () => switchTab('coder');
+
+function autoGrow(){
+  const newHeight = Math.max(this.scrollHeight, 32);
+  if (this.style.height !== `${newHeight}px`) {
+    this.style.height = 'auto';
+    this.style.height = `${newHeight}px`;
+  }
+}
+
+transcript.addEventListener('click', e => {
+  const svg = e.target.closest('svg');
+  if(!svg || !svg.parentElement.classList.contains('icons')) return;
+  const icons = svg.parentElement;
+  const bubble = icons.parentElement;
+  const text = bubble.dataset.text || '';
+  const role = bubble.dataset.role;
+  const idx = Array.from(icons.children).indexOf(svg);
+  if(idx === 0){
+    navigator.clipboard.writeText(text);
+    const tip = document.createElement('span');
+    tip.textContent = 'Copied!';
+    tip.className = 'absolute -top-5 right-0 text-xs bg-black text-white px-1 rounded';
+    bubble.appendChild(tip);
+    setTimeout(() => tip.remove(), 1000);
+  } else if(idx === 1){
+    const other = role === 'planner' ? 'coder' : 'planner';
+    switchTab(other);
+    input.value = text;
+    autoGrow.call(input);
+    sendMessage();
+  } else if(idx === 2){
+    const arr = JSON.parse(localStorage.getItem('pinned') || '[]');
+    const i = arr.indexOf(text);
+    if(i === -1){
+      arr.push(text);
+      svg.classList.add('text-yellow-400');
+    } else {
+      arr.splice(i,1);
+      svg.classList.remove('text-yellow-400');
+    }
+    localStorage.setItem('pinned', JSON.stringify(arr));
+  }
+});
+input.addEventListener('input', autoGrow);
+
+function appendMessage(role, text, fromUser=false){
+  const wrap = document.createElement('div');
+  wrap.className = fromUser ? 'flex justify-end mb-3' : 'flex mb-3';
+  const bubble = document.createElement('div');
+  bubble.className = 'relative rounded-lg p-3 shadow text-sm';
+  bubble.classList.add('max-w-[90%]','xs:max-w-[80%]','sm:max-w-[60%]');
+  bubble.dataset.role = role;
+  bubble.dataset.text = text;
+  if(fromUser){
+    bubble.classList.add('bg-blue-500','text-white');
+  } else {
+    bubble.classList.add('bg-gray-100','text-gray-900');
+    const chip = document.createElement('span');
+    chip.className = 'absolute -left-2 sm:-left-3 top-1 w-6 h-6 rounded-full text-xs flex items-center justify-center';
+    if(role === 'planner'){
+      chip.textContent = '💡';
+      chip.classList.add('bg-blue-200');
+    } else {
+      chip.textContent = '🔧';
+      chip.classList.add('bg-green-200');
+    }
+    bubble.appendChild(chip);
+  }
+  const msg = document.createElement('div');
+  msg.className = 'message-content';
+  msg.innerText = text;
+  bubble.appendChild(msg);
+  const icons = document.createElement('div');
+  icons.className = 'icons flex gap-2 mt-1 justify-end text-gray-400';
+  icons.innerHTML = `
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 2H8a2 2 0 00-2 2v16a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2z"/><path d="M9 4h6v2H9z"/></svg>
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16M12 4l8 8-8 8"/></svg>
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M8 7l4-4 4 4"/></svg>`;
+  bubble.appendChild(icons);
+  const pinned = JSON.parse(localStorage.getItem('pinned') || '[]');
+  if(pinned.includes(text)){
+    icons.children[2].classList.add('text-yellow-400');
+  }
+  wrap.appendChild(bubble);
+  transcript.appendChild(wrap);
+  bubble.scrollIntoView();
+}
+
+function appendThinkingIndicator(role) {
+  const wrap = document.createElement('div');
+  wrap.className = 'flex mb-3';
+  wrap.id = 'thinking-indicator';
+  
+  const bubble = document.createElement('div');
+  bubble.className = 'relative rounded-lg p-3 shadow text-sm bg-gray-50 text-gray-600 max-w-[90%] xs:max-w-[80%] sm:max-w-[60%]';
+  
+  // Add role chip
+  const chip = document.createElement('span');
+  chip.className = 'absolute -left-2 sm:-left-3 top-1 w-6 h-6 rounded-full text-xs flex items-center justify-center';
+  if(role === 'planner'){
+    chip.textContent = '💡';
+    chip.classList.add('bg-blue-200');
+  } else {
+    chip.textContent = '🔧';
+    chip.classList.add('bg-green-200');
+  }
+  bubble.appendChild(chip);
+  
+  // Add thinking indicator content
+  const content = document.createElement('div');
+  content.className = 'thinking-indicator';
+  content.innerHTML = `
+    <div class="spinner"></div>
+    <span>Thinking...</span>
+  `;
+  bubble.appendChild(content);
+  
+  wrap.appendChild(bubble);
+  transcript.appendChild(wrap);
+  bubble.scrollIntoView();
+  
+  thinkingElement = wrap;
+  return wrap;
+}
+
+function removeThinkingIndicator() {
+  if (thinkingElement) {
+    thinkingElement.remove();
+    thinkingElement = null;
+  }
+}
+
+// Memory logs functionality - SILENT polling
+async function fetchMemoryLogs(showStatus = true) {
+  try {
+    const jwt = await ensureToken();
+    const response = await fetch(`${GW}/mem/events?limit=10`, {
+      headers: {
+        'Authorization': `Bearer ${jwt}`
+      }
+    });
+    
+    if (!response.ok) {
+      if (showStatus) {
+        logSimple(`Error: HTTP ${response.status}: ${response.statusText}`);
+      }
+      return;
+    }
+    
+    const data = await response.json();
+    displayMemoryLogs(data, showStatus);
+    
+  } catch (error) {
+    if (showStatus) {
+      logSimple(`Error fetching memory: ${error.message}`);
+    }
+  }
+}
+
+function displayMemoryLogs(weaviateResponse, showStatus = true) {
+  // Check if we have memory events
+  if (!weaviateResponse?.data?.Get?.MemoryEvent) {
+    if (showStatus) {
+      logSimple('No MemoryEvent data found');
+    }
+    return;
+  }
+  
+  const events = weaviateResponse.data.Get.MemoryEvent;
+  
+  // Only show loading message on first load or manual refresh
+  if (showStatus) {
+    logSimple(`Loaded ${events.length} memory events (newest first)`);
+  }
+  
+  // Store the memory events and refresh display
+  window.memoryEvents = events;
+  refreshLogsDisplay(showStatus); // Only scroll to top if showing status (first load/manual refresh)
+}
+
+function refreshLogsDisplay(scrollToTop = false) {
+  // Store current scroll position and expanded states
+  const currentScrollTop = logs.scrollTop;
+  const currentExpanded = Array.from(logs.children)
+    .filter(child => child.classList.contains('expanded'))
+    .map(child => child.dataset.eventId)
+    .filter(id => id);
+  
+  expandedEventIds = new Set(currentExpanded);
+  
+  // Clear logs
+  logs.innerHTML = '';
+  
+  // Combine system logs and memory events
+  const allEntries = [];
+  
+  // Add system log entries
+  systemLogEntries.forEach(entry => {
+    allEntries.push({
+      ...entry,
+      timestamp: entry.timestamp
+    });
+  });
+  
+  // Add memory events
+  if (window.memoryEvents) {
+    window.memoryEvents.forEach(event => {
+      allEntries.push({
+        type: 'memory',
+        timestamp: new Date(event.timestamp),
+        event: event,
+        id: event._additional.id
+      });
+    });
+  }
+  
+  // Sort by timestamp (newest first)
+  allEntries.sort((a, b) => b.timestamp - a.timestamp);
+  
+  // Render all entries in chronological order
+  allEntries.forEach(entry => {
+    if (entry.type === 'system') {
+      const line = document.createElement('div');
+      line.className = 'text-yellow-300 pb-1';
+      line.textContent = `[${entry.timestamp.toLocaleTimeString()}] ${entry.message}`;
+      logs.appendChild(line);
+    } else {
+      renderMemoryEvent(entry.event);
+    }
+  });
+  
+  // Restore scroll position or scroll to top based on context
+  if (scrollToTop) {
+    logs.scrollTop = 0; // Scroll to top for intentional actions
+  } else {
+    // Restore previous scroll position for silent updates
+    setTimeout(() => {
+      logs.scrollTop = currentScrollTop;
+    }, 0);
+  }
+}
+
+function renderMemoryEvent(event) {
+  const logEntry = document.createElement('div');
+  logEntry.className = 'border-b border-gray-600 pb-2 mb-2';
+  logEntry.dataset.eventId = event._additional.id;
+  
+  // Create a more readable format
+  const timestamp = new Date(event.timestamp).toLocaleTimeString();
+  const id = event._additional.id.substring(0, 8);
+  
+  let displayContent = '';
+  let eventType = 'unknown';
+  let model = 'unknown';
+  
+  // Check if this is a rich event with result data
+  if (event.result?.choices?.[0]?.message?.content) {
+    const message = event.result.choices[0].message.content;
+    displayContent = message.length > 200 ? message.substring(0, 200) + '...' : message;
+    model = event.result.model || 'unknown';
+    eventType = 'response';
+  } else if (event.content) {
+    displayContent = event.content.length > 200 ? event.content.substring(0, 200) + '...' : event.content;
+    eventType = 'content';
+  } else if (event.event) {
+    displayContent = `[${event.event}]`;
+    eventType = event.event;
+  } else {
+    displayContent = '[No content available]';
+  }
+  
+  // Color code by event type
+  let headerColor = 'text-blue-300';
+  if (eventType === 'response') headerColor = 'text-green-300';
+  else if (eventType === 'content') headerColor = 'text-cyan-300';
+  
+  // Check if this event should be expanded
+  const isExpanded = expandedEventIds.has(event._additional.id);
+  
+  if (isExpanded) {
+    logEntry.classList.add('expanded');
+    logEntry.innerHTML = `
+      <div class="${headerColor} text-xs font-bold">
+        ${timestamp} [${id}] ${model} (${eventType}) - EXPANDED
+      </div>
+      <pre class="text-gray-300 pl-2 whitespace-pre-wrap text-xs overflow-hidden max-h-60 overflow-y-auto">${JSON.stringify(event, null, 2)}</pre>
+    `;
+  } else {
+    logEntry.innerHTML = `
+      <div class="${headerColor} text-xs font-bold">
+        ${timestamp} [${id}] ${model} (${eventType})
+      </div>
+      <div class="text-gray-300 pl-2 text-xs leading-relaxed">${displayContent.replace(/\n/g, ' ')}</div>
+    `;
+  }
+  
+  // Click to expand full details
+  logEntry.style.cursor = 'pointer';
+  logEntry.onclick = () => {
+    const eventId = event._additional.id;
+    if (logEntry.classList.contains('expanded')) {
+      // Collapse
+      logEntry.classList.remove('expanded');
+      expandedEventIds.delete(eventId);
+      logEntry.innerHTML = `
+        <div class="${headerColor} text-xs font-bold">
+          ${timestamp} [${id}] ${model} (${eventType})
+        </div>
+        <div class="text-gray-300 pl-2 text-xs leading-relaxed">${displayContent.replace(/\n/g, ' ')}</div>
+      `;
+    } else {
+      // Expand
+      logEntry.classList.add('expanded');
+      expandedEventIds.add(eventId);
+      logEntry.innerHTML = `
+        <div class="${headerColor} text-xs font-bold">
+          ${timestamp} [${id}] ${model} (${eventType}) - EXPANDED
+        </div>
+        <pre class="text-gray-300 pl-2 whitespace-pre-wrap text-xs overflow-hidden max-h-60 overflow-y-auto">${JSON.stringify(event, null, 2)}</pre>
+      `;
+    }
+  };
+  
+  logs.appendChild(logEntry);
+}
+
+// Auto-refresh functionality - SILENT background polling
+let memoryRefreshInterval;
+
+function startMemoryAutoRefresh() {
+  if (memoryRefreshInterval) {
+    clearInterval(memoryRefreshInterval);
+  }
+  memoryRefreshInterval = setInterval(() => {
+    if (document.body.classList.contains('log-open')) {
+      fetchMemoryLogs(false); // Silent polling - don't show status messages and don't scroll
+    }
+  }, 5000); // Increased to 5 seconds to reduce refresh frequency
+}
+
+function stopMemoryAutoRefresh() {
+  if (memoryRefreshInterval) {
+    clearInterval(memoryRefreshInterval);
+    memoryRefreshInterval = null;
+  }
+}
+
+// Log header click handler
+document.getElementById('logHeader').onclick = () => {
+    const body = document.body;
+    const chevron = document.getElementById('logChevron');
+    
+    body.classList.toggle('log-open');
+    
+    if (body.classList.contains('log-open')) {
+        chevron.style.transform = 'rotate(180deg)';
+        fetchMemoryLogs(true); // Show status on first load AND scroll to top
+        startMemoryAutoRefresh();
+    } else {
+        chevron.style.transform = 'rotate(0deg)';
+        stopMemoryAutoRefresh();
+    }
+};
+
+function sendMessage(){
+  const text = input.value.trim();
+  if(!text) return;
+  
+  appendMessage(activeRole, text, true);
+  log(`You -> ${activeRole}: ${text}`);
+  
+  // Show thinking indicator
+  appendThinkingIndicator(activeRole);
+  
+  input.value = '';
+  autoGrow.call(input);
+  sendBtn.disabled = true;
+  
+  const jwt = await ensureToken();
+  
+  const body = {
+    input: {
+      model: 'tinyllama',
+      messages: [{ role: 'user', content: text }],
+      stream: false
+    },
+    target_url: activeRole === 'planner' ? PLANNER_URL : CODER_URL
+  };
+  
+  fetch(`${GW}/a2a/tasks/send`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${jwt}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  })
+    .then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(t)))
+    .then(({task_id}) => pollResult(task_id))
+    .catch(err => { 
+      log('Error: ' + err); 
+      removeThinkingIndicator();
+      sendBtn.disabled = false; 
+    });
+  
+  // Silently refresh memory logs after sending if panel is open
+  if (document.body.classList.contains('log-open')) {
+    setTimeout(() => {
+      fetchMemoryLogs(false); // Silent refresh - preserve scroll position
+    }, 1000);
+  }
+}
+
+async function pollResult(tid){
+  const jwt = await ensureToken();
+  try{
+  while(true){
+      await new Promise(r => setTimeout(r, 800));
+      const r = await fetch(`${GW}/a2a/tasks/status/${tid}`, {
+        headers: { 'Authorization': `Bearer ${jwt}` }
+      });
+      const st = await r.json();
+      console.log('status →', st);
+      if(st.state === 'done'){
+        const ans = st.result.choices?.[0]?.message?.content || JSON.stringify(st.result);
+        
+        removeThinkingIndicator();
+        appendMessage(activeRole, ans);
+        log(`${activeRole} responded`);
+        sendBtn.disabled = false;
+        
+        // Silently refresh memory logs after response
+        if (document.body.classList.contains('log-open')) {
+          setTimeout(() => {
+            fetchMemoryLogs(false); // Silent refresh - preserve scroll position
+          }, 500);
+        }
+        break;
+      } else if(st.state === 'error'){
+        log('Upstream error: ' + JSON.stringify(st.result));
+        removeThinkingIndicator();
+        sendBtn.disabled = false;
+        break;
+      }
+    }
+  }catch(err){
+    log('Error: ' + err);
+    removeThinkingIndicator();
+    sendBtn.disabled = false;
+  }
+}
+
+sendBtn.onclick = sendMessage;
+input.addEventListener('keydown', e => {
+  if(e.key === 'Enter' && (e.metaKey || e.ctrlKey)){
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+// Manual refresh button - this one DOES show status AND scrolls to top
+document.getElementById('refreshMemory').onclick = (e) => {
+    e.stopPropagation();
+    fetchMemoryLogs(true); // Show status when manually refreshed AND scroll to top
+};
 </script>
 </body>
 </html>

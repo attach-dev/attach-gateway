@@ -8,3 +8,4 @@ __pyo3*.so
 .env
 .cursorrules
 token.txt
+attach_gateway.tar.gz
