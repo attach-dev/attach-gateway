@@ -1,5 +1,5 @@
 root: docs/README.md
 
 structure:
-  readme: docs/README.md
-  summary: docs/SUMMARY.md
+  readme: docs/README.md     # landing page
+  summary: false             # Not using Summary.md
