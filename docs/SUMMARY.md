@@ -1,7 +1,12 @@
-# Table of contents
+# Summary
 
-* [Attach Gateway](introduction.md)
-* [Repository Guidelines](agents.md)
-* [docs](docs/README.md)
-  * [Attach‑Gateway](docs/design.md)
-* [Examples](examples.md)
+* [Repository Guidelines](Repository%20Guidelines.md)
+* [Attach Gateway](Attach-Gateway.md)
+
+## Examples
+* [Planner/Coder UI demo](Examples/demo2-ui.md)
+
+## Agent Hand-offs with Attach
+* [Introduction](agent-handoffs/01-intro.md)
+* [Worked example: Google A2A](agent-handoffs/02-google-a2a.md)
+* [openHands (coming soon)](agent-handoffs/03-openHands.md)
