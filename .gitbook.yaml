@@ -1,0 +1,6 @@
+# .gitbook.yaml
+root: ./docs/
+
+structure:
+  readme: introduction.md      # first page GitBook shows
+  summary: SUMMARY.md          # optional manual sidebar order
