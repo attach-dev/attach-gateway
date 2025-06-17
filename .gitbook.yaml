@@ -1,0 +1,15 @@
+root: docs/README.md          # landing page
+structure:
+  readme: docs/README.md
+  summary:
+    - docs/Repository Guidelines.md
+    - docs/Attach-Gateway.md
+    - label: Examples
+      children:
+        - docs/Examples/demo2-ui.md
+    - label: Agent Hand-offs with Attach
+      collapsed: true
+      children:
+        - docs/agent-handoffs/01-intro.md
+        - docs/agent-handoffs/02-google-a2a.md
+        # 03-openHands.md will appear once you add the file
