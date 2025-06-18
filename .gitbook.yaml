@@ -10,8 +10,8 @@ root: ./docs/
 
 # Structure configuration
 structure:
-  # Use Introduction.md
-  readme: introduction.md
+  # Use design.md as the main README
+  readme: design.md
   
   # Use SUMMARY.md for navigation structure
   summary: SUMMARY.md
