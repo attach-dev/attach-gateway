@@ -69,7 +69,7 @@ Optional configuration:
 
 ```bash
 export ENGINE_URL=http://localhost:11434  # Default: Ollama
-export MEM_BACKEND=none                   # Options: none, weaviate, ump
+export MEM_BACKEND=none                   # Options: none, weaviate, sakana
 export WEAVIATE_URL=http://localhost:8081 # Required if MEM_BACKEND=weaviate
 ```
 

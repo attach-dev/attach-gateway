@@ -19,7 +19,7 @@ cp .env.example .env
 | `OIDC_ISSUER` | ✅ | - | Your OIDC provider URL |
 | `OIDC_AUD` | ✅ | - | JWT audience claim |
 | `ENGINE_URL` | ❌ | `http://localhost:11434` | Target LLM engine |
-| `MEM_BACKEND` | ❌ | `none` | Memory backend (`none`, `weaviate`, `ump`) |
+| `MEM_BACKEND` | ❌ | `none` | Memory backend (`none`, `weaviate`, `sakana`) |
 | `WEAVIATE_URL` | ❌ | - | Required if `MEM_BACKEND=weaviate` |
 
 ### Environment-Specific Configs
