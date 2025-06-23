@@ -154,9 +154,6 @@ flowchart TD
     GW -- ⑪ /a2a/tasks/status = done --> UI
 ```
 
-<!-- Static fallback for PyPI (PyPI ignores mermaid, will show this instead) -->
-![Architecture diagram](docs/arch.png)
-
 **Key headers**
 
 | Header | Meaning |
