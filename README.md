@@ -107,15 +107,11 @@ You should see a JSON response plus `X‑ATTACH‑Session‑Id` header – proof
 ---
 
 ## Architecture (planner → coder hand‑off)
-<!-- rendered image fallback for PyPI/VS Code/etc. -->
-![Architecture diagram](docs/arch.png)
 
-<!-- mermaid source (ignored by PyPI) -->
-<!--
 ```mermaid
 flowchart TD
     %%────────────────────────────────
-    %%  COMPONENTS
+    %%  COMPONENTS  
     %%────────────────────────────────
     subgraph Front-end
         UI["Browser<br/> demo.html"]
@@ -156,8 +152,10 @@ flowchart TD
     OL -- ⑨ JSON response --> GW
     GW -- ⑩ Write response to Weaviate --> WV
     GW -- ⑪ /a2a/tasks/status = done --> UI
-
 ```
+
+<!-- Static fallback for PyPI (PyPI ignores mermaid, will show this instead) -->
+![Architecture diagram](docs/arch.png)
 
 **Key headers**
 
