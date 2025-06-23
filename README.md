@@ -107,7 +107,11 @@ You should see a JSON response plus `X‑ATTACH‑Session‑Id` header – proof
 ---
 
 ## Architecture (planner → coder hand‑off)
+<!-- rendered image fallback for PyPI/VS Code/etc. -->
+![Architecture diagram](docs/arch.png)
 
+<!-- mermaid source (ignored by PyPI) -->
+<!--
 ```mermaid
 flowchart TD
     %%────────────────────────────────
@@ -141,7 +145,7 @@ flowchart TD
 
     %%─ Planner hop
     GW -- ② Proxy → planner<br/>(X-Attach-User, Session) --> PL
-    PL -- ③ Write "plan" doc --> WV
+    PL -- ③ Write plan doc --> WV
     PL -- ④ /a2a/tasks/send\nbody:{mem_id} --> GW
 
     %%─ Coder hop
