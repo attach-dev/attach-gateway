@@ -1,6 +1,7 @@
 # Summary
 
 * [Attach Gateway](design.md)
+* [Installation](installation.md)
 * [Examples](examples.md)
 * Agent Hand‑offs with Attach
   * [Introduction](agent-handoffs/01-intro.md)

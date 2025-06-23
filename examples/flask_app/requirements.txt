@@ -1,0 +1,4 @@
+flask>=2.0.0
+httpx>=0.24.0
+python-dotenv>=0.19.0
+attach-dev 

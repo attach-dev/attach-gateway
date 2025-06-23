@@ -11,7 +11,6 @@ from logs import router as logs_router
 from auth.oidc import verify_jwt  # Fixed: was auth.jwt, now auth.oidc
 from middleware.auth import jwt_auth_mw  # ← your auth middleware
 from middleware.session import session_mw  # ← generates session-id header
-from proxy.engine import proxy_to_engine
 from mem import write as mem_write  # Import memory write function
 
 # Memory router
