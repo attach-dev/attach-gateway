@@ -24,6 +24,13 @@ def _require_env(var: str) -> str:
     return val
 
 
+# ---------------------------------------------------------------------------
+# Mandatory config loaded at import time (can be empty during tests)
+# ---------------------------------------------------------------------------
+OIDC_ISSUER: str = os.getenv("OIDC_ISSUER", "").rstrip("/")
+OIDC_AUD: str = os.getenv("OIDC_AUD", "")
+
+
 @lru_cache(maxsize=1)
 def _fetch_jwks() -> dict[str, Any]:
     """
@@ -32,8 +39,7 @@ def _fetch_jwks() -> dict[str, Any]:
     We wrap the payload together with the timestamp so we can implement a TTL
     on top of `lru_cache` (which by itself is size-based, not time-based).
     """
-    issuer = _require_env("OIDC_ISSUER").rstrip("/")
-    url = f"{issuer}/.well-known/jwks.json"
+    url = f"{OIDC_ISSUER}/.well-known/jwks.json"
 
     resp = httpx.get(url, timeout=5)
     resp.raise_for_status()
@@ -90,8 +96,8 @@ def verify_jwt(token: str, *, leeway: int = 60) -> dict[str, Any]:
             raise ValueError("signing key not found in issuer JWKS")
 
     # 3) Verify + decode
-    issuer = _require_env("OIDC_ISSUER")
-    audience = _require_env("OIDC_AUD")
+    issuer = OIDC_ISSUER
+    audience = OIDC_AUD
 
     return jwt.decode(
         token,
