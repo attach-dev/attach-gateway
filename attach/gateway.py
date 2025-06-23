@@ -34,7 +34,7 @@ async def get_memory_events(request: Request, limit: int = 10):
         if not user_sub:
             raise HTTPException(status_code=401, detail="User not authenticated")
 
-        client = weaviate.Client("http://localhost:6666")
+        client = weaviate.Client(os.getenv("WEAVIATE_URL", "http://localhost:6666"))
         if not client.is_ready():
             raise HTTPException(status_code=503, detail="Weaviate is not ready")
 
