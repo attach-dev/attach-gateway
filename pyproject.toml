@@ -30,6 +30,7 @@ dependencies = [
     "httpx>=0.27.0",
     "python-jose[cryptography]>=3.3.0",
     "click>=8.0.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -52,6 +53,7 @@ attach-gateway = "attach.__main__:main"
 # Include your existing modules with cleaner targeting
 [tool.hatch.build.targets.wheel]
 packages = ["attach", "auth", "middleware", "mem", "proxy", "a2a", "attach_pydid"]
+
 
 # Dynamic version from attach/__init__.py
 [tool.hatch.version]

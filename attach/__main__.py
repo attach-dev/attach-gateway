@@ -6,6 +6,13 @@ from .gateway import create_app
 
 def main():
     """Run Attach Gateway server"""
+    # Load .env file if it exists (for development)
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass  # python-dotenv not installed, that's OK for production
+    
     import click
     
     @click.command()
