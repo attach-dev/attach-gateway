@@ -97,6 +97,8 @@ def verify_jwt(token: str, *, leeway: int = 60) -> dict[str, Any]:
     if not kid:
         raise ValueError("JWT header missing 'kid'")
 
+    print("ISSUER =", issuer, "AUD =", audience, "KID =", kid)
+
     # 2) Locate JWK (with one forced refresh on miss)
     keys = _jwks(issuer)
     key_cfg = next((k for k in keys if k["kid"] == kid), None)
