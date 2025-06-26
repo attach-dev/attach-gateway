@@ -31,8 +31,6 @@ async def jwt_auth_mw(request: Request, call_next):
     • Rejects the request with 401 on any failure.
     • Skips authentication for excluded paths.
     """
-    print("AUTH HDR =", request.headers.get("Authorization", "")[:80])
-
     # Skip authentication for excluded paths
     if request.url.path in EXCLUDED_PATHS:
         return await call_next(request)
