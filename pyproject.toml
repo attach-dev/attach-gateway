@@ -1,0 +1,68 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "attach-dev"
+# Dynamic version from __init__.py
+dynamic = ["version"]
+description = "Identity & Memory side-car for every LLM engine and multi-agent framework"
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Hammad Tariq", email = "hammad@attach.dev"},
+]
+keywords = ["llm", "auth", "sso", "memory", "agents", "ai", "fastapi"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers", 
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11", 
+    "Programming Language :: Python :: 3.12",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+    "httpx>=0.27.0",
+    "python-jose[cryptography]>=3.3.0",
+    "click>=8.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+memory = ["weaviate-client>=3.26.7,<4.0.0"]
+temporal = ["temporalio>=1.5.0"]
+dev = [
+    "pytest>=8.0.0", 
+    "pytest-asyncio>=0.23.0",
+    "black>=24.1.0",
+    "isort>=5.13.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/attach-dev/attach-gateway"
+Repository = "https://github.com/attach-dev/attach-gateway"
+
+[project.scripts]
+attach-gateway = "attach.__main__:main"
+
+# Include your existing modules with cleaner targeting
+[tool.hatch.build.targets.wheel]
+packages = ["attach", "auth", "middleware", "mem", "proxy", "a2a", "attach_pydid"]
+
+
+# Dynamic version from attach/__init__.py
+[tool.hatch.version]
+path = "attach/__init__.py"
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+
+[tool.isort]
+profile = "black"
+line_length = 88 

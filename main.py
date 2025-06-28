@@ -11,8 +11,8 @@ from logs import router as logs_router
 from auth.oidc import verify_jwt  # Fixed: was auth.jwt, now auth.oidc
 from middleware.auth import jwt_auth_mw  # ← your auth middleware
 from middleware.session import session_mw  # ← generates session-id header
-from proxy.engine import proxy_to_engine
 from mem import write as mem_write  # Import memory write function
+from proxy import router as proxy_router
 
 # Memory router
 mem_router = APIRouter(prefix="/mem", tags=["memory"])
@@ -144,7 +144,8 @@ async def auth_config():
     }
 app.include_router(a2a_router, prefix="/a2a")
 app.include_router(logs_router)
-app.include_router(mem_router)  # Add the memory router
+app.include_router(mem_router)
+app.include_router(proxy_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:9000", "http://127.0.0.1:9000"],

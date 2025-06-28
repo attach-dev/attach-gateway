@@ -22,4 +22,7 @@ async def test_init_weaviate_backend(monkeypatch):
 
     mem = importlib.reload(importlib.import_module("mem"))
 
-    assert isinstance(mem._memory, DummyMem)
+    assert mem._memory is None
+    backend = mem._get_backend()
+    assert isinstance(backend, DummyMem)
+    assert mem._memory is backend
