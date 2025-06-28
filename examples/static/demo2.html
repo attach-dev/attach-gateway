@@ -19,8 +19,18 @@
 <head>
 <meta charset="utf-8" />
 <title>Attach Gateway Demo</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms@0.5.9"></script>
-<script src="https://cdn.auth0.com/js/auth0-spa-js/2.6/auth0-spa-js.production.js"></script>
+<script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+<script src="./js/auth0-spa-js@2.1.3.js"></script>
+<script>
+  // Debug what Auth0 library exposes
+  console.log('🔍 Available Auth0 properties:', Object.keys(window).filter(k => k.toLowerCase().includes('auth')));
+  console.log('🔍 Window.auth0:', window.auth0);
+  console.log('🔍 Window.createAuth0Client:', window.createAuth0Client);
+  if (window.auth0) {
+    console.log('🔍 Auth0 object properties:', Object.keys(window.auth0));
+    console.log('🔍 Auth0.createAuth0Client:', window.auth0.createAuth0Client);
+  }
+</script>
 <style>
   body {font-family: system-ui, sans-serif;}
   
@@ -134,7 +144,7 @@
       <button data-role="planner" class="px-3 py-1 bg-blue-100 text-blue-700" id="plannerTab">Ask Planner</button>
       <button data-role="coder" class="px-3 py-1 text-gray-600 hover:bg-gray-50" id="coderTab">Ask Coder</button>
     </div>
-    <textarea id="chatInput" rows="1" class="flex-1 resize-none border rounded-md p-2 text-sm focus:outline-none" placeholder="Type a message..."></textarea>
+    <textarea id="chatInput" rows="1" class="flex-1 resize-none border rounded-md p-2 text-sm focus:outline-none" placeholder="Type a message... (sign in required to send)"></textarea>
     <button id="sendBtn" class="p-2 text-blue-700 hover:text-blue-800">
       <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3l5 9-5 9z"/></svg>
     </button>
@@ -153,38 +163,162 @@
   <div id="logs" class="overflow-auto px-2 pb-1"></div>
 </div>
 <script type="module">
-const signinBtn  = document.getElementById('signinBtn');
-const signoutBtn = document.getElementById('signoutBtn');
-const GW = location.protocol + '//' + location.hostname + ':8080';
-
-const cfg = await fetch(`${GW}/auth/config`).then(r => r.json());
-const auth0 = await createAuth0Client({
-  domain: cfg.domain,
-  clientId: cfg.client_id,
-  authorizationParams: {
-    audience: cfg.audience,
-    redirect_uri: window.location.origin + '/demo2.html'
-  },
-  cacheLocation: 'localstorage',
-  useRefreshTokens: true,
-});
-
-if (window.location.search.includes("code=")) {
-  await auth0.handleRedirectCallback();
-  window.history.replaceState({}, document.title, "/demo2.html");
-}
-
-async function ensureToken() {
-  return await auth0.getTokenSilently({ authorizationParams:{ scope:"openid profile email" }});
-}
-
-signinBtn.onclick  = () => auth0.loginWithRedirect({ authorizationParams:{ scope:"openid profile email offline_access" }});
-signoutBtn.onclick = () => auth0.logout({ logoutParams:{ returnTo: window.location.origin + "/demo2.html" }});
-
-if (await auth0.isAuthenticated()) {
-  signinBtn.classList.add("hidden");
-  signoutBtn.classList.remove("hidden");
-}
+  const signinBtn  = document.getElementById('signinBtn');
+  const signoutBtn = document.getElementById('signoutBtn');
+  const GW = location.protocol + '//' + location.hostname + ':8080';
+  
+  // Initialize Auth0 - declare auth0Client properly
+  let auth0Client = null;
+  
+  async function initAuth0() {
+    console.log('🔍 Starting Auth0 initialization...');
+    
+    try {
+      console.log('🔍 Fetching auth config...');
+      const cfg = await fetch(`${GW}/auth/config`).then(r => r.json());
+      console.log('✅ Auth config received:', cfg);
+      
+      // Wait for Auth0 library to load with better error handling
+      console.log('🔍 Waiting for Auth0 library...');
+      let attempts = 0;
+      const maxAttempts = 50;
+      
+      while (attempts < maxAttempts) {
+        if (typeof window.auth0?.createAuth0Client === 'function') {
+          console.log('✅ Auth0 library found');
+          break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+        
+        // Log progress every 10 attempts
+        if (attempts % 10 === 0) {
+          console.log(`🔍 Still waiting for Auth0 library... (attempt ${attempts}/${maxAttempts})`);
+        }
+      }
+      
+      if (typeof window.auth0?.createAuth0Client !== 'function') {
+        console.error('❌ Auth0 library failed to load after', maxAttempts, 'attempts');
+        console.error('❌ Available on window:', Object.keys(window).filter(k => k.includes('auth') || k.includes('Auth')));
+        
+        // Show user-friendly error
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = `
+          position: fixed; top: 20px; left: 50%; transform: translateX(-50%); 
+          background: #f56565; color: white; padding: 12px 20px; 
+          border-radius: 8px; z-index: 9999; font-family: system-ui;
+        `;
+        errorDiv.textContent = 'Auth0 library failed to load. Please refresh the page or check your internet connection.';
+        document.body.appendChild(errorDiv);
+        
+        return;
+      }
+      
+      console.log('🔍 Creating Auth0 client...');
+      auth0Client = await window.auth0.createAuth0Client({
+        domain: cfg.domain,
+        clientId: cfg.client_id,
+        authorizationParams: {
+          audience: cfg.audience,
+          redirect_uri: window.location.origin + '/demo2.html'
+        },
+        cacheLocation: 'localstorage',
+        useRefreshTokens: true,
+      });
+      console.log('✅ Auth0 client created successfully');
+      
+      // Handle redirect callback
+      if (window.location.search.includes("code=")) {
+        await auth0Client.handleRedirectCallback();
+        window.history.replaceState({}, document.title, "/demo2.html");
+      }
+      
+      // Update UI based on auth state
+      if (await auth0Client.isAuthenticated()) {
+        signinBtn.classList.add("hidden");
+        signoutBtn.classList.remove("hidden");
+        document.getElementById('chatInput').placeholder = "Type a message...";
+      }
+      
+      console.log('✅ Auth0 initialization complete');
+    } catch (error) {
+      console.error('❌ Auth0 initialization failed:', error);
+      
+      // Show user-friendly error
+      const errorDiv = document.createElement('div');
+      errorDiv.style.cssText = `
+        position: fixed; top: 20px; left: 50%; transform: translateX(-50%); 
+        background: #f56565; color: white; padding: 12px 20px; 
+        border-radius: 8px; z-index: 9999; font-family: system-ui;
+      `;
+      errorDiv.textContent = `Auth0 initialization failed: ${error.message}`;
+      document.body.appendChild(errorDiv);
+    }
+  }
+  
+  // Start Auth0 initialization
+  initAuth0();
+  
+  async function ensureToken() {
+    if (!auth0Client) {
+      throw new Error('Auth0 not initialized. Please refresh the page.');
+    }
+    
+    try {
+      const token = await auth0Client.getTokenSilently({ 
+        authorizationParams: { scope: "openid profile email" }
+      });
+      
+      if (!token || typeof token !== 'string') {
+        throw new Error('Invalid token received');
+      }
+      
+      return token;
+    } catch (error) {
+      console.error('Token fetch failed:', error);
+      await auth0Client.loginWithRedirect();
+      throw error;
+    }
+  }
+  
+  signinBtn.onclick = async () => {
+    if (!auth0Client) {
+      alert('Authentication not available. Please refresh the page.');
+      return;
+    }
+    
+    try {
+      await auth0Client.loginWithRedirect({ 
+        authorizationParams: { 
+          scope: "openid profile email offline_access",
+          prompt: "login"
+        }
+      });
+    } catch (error) {
+      console.error('Login failed:', error);
+    }
+  };
+  
+  signoutBtn.onclick = async () => {
+    if (!auth0Client) {
+      alert('Authentication not available. Please refresh the page.');
+      return;
+    }
+    
+    try {
+      localStorage.removeItem('pinned');
+      systemLogEntries.length = 0;
+      
+      await auth0Client.logout({ 
+        logoutParams: { 
+          returnTo: window.location.origin + "/demo2.html",
+          federated: true
+        }
+      });
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
 
 const transcript = document.getElementById('transcript');
 const logs = document.getElementById('logs');
@@ -587,26 +721,66 @@ function stopMemoryAutoRefresh() {
   }
 }
 
-// Log header click handler
-document.getElementById('logHeader').onclick = () => {
-    const body = document.body;
-    const chevron = document.getElementById('logChevron');
-    
-    body.classList.toggle('log-open');
-    
-    if (body.classList.contains('log-open')) {
-        chevron.style.transform = 'rotate(180deg)';
-        fetchMemoryLogs(true); // Show status on first load AND scroll to top
-        startMemoryAutoRefresh();
-    } else {
-        chevron.style.transform = 'rotate(0deg)';
-        stopMemoryAutoRefresh();
+// Helper function to check auth and show friendly prompt
+async function checkAuthWithPrompt(action = 'use this feature') {
+  if (!auth0Client) {
+    showAuthPrompt(`Please sign in to ${action}`);
+    return false;
+  }
+  
+  try {
+    const isAuthenticated = await auth0Client.isAuthenticated();
+    if (!isAuthenticated) {
+      showAuthPrompt(`Please sign in to ${action}`);
+      return false;
     }
-};
+    return true;
+  } catch (error) {
+    showAuthPrompt(`Please sign in to ${action}`);
+    return false;
+  }
+}
 
-function sendMessage(){
+// Show a friendly, non-intrusive auth prompt
+function showAuthPrompt(message) {
+  const prompt = document.createElement('div');
+  prompt.style.cssText = `
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%); 
+    background: #3b82f6; color: white; padding: 12px 20px; 
+    border-radius: 8px; z-index: 9999; font-family: system-ui;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    display: flex; align-items: center; gap: 12px;
+  `;
+  prompt.innerHTML = `
+    <span>${message}</span>
+    <button onclick="this.parentElement.remove(); document.getElementById('signinBtn').click();" 
+            style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+      Sign In
+    </button>
+    <button onclick="this.parentElement.remove();" 
+            style="background: none; border: none; color: white; cursor: pointer; font-size: 16px; padding: 0 4px;">
+      ×
+    </button>
+  `;
+  document.body.appendChild(prompt);
+  
+  // Auto-remove after 5 seconds
+  setTimeout(() => {
+    if (prompt.parentElement) {
+      prompt.remove();
+    }
+  }, 5000);
+}
+
+// Update sendMessage function
+async function sendMessage(){
   const text = input.value.trim();
   if(!text) return;
+  
+  // Check auth before sending
+  if (!(await checkAuthWithPrompt('send messages'))) {
+    return;
+  }
   
   appendMessage(activeRole, text, true);
   log(`You -> ${activeRole}: ${text}`);
@@ -700,10 +874,36 @@ input.addEventListener('keydown', e => {
   }
 });
 
-// Manual refresh button - this one DOES show status AND scrolls to top
-document.getElementById('refreshMemory').onclick = (e) => {
+// Update log header click handler
+document.getElementById('logHeader').onclick = async () => {
+    const body = document.body;
+    const chevron = document.getElementById('logChevron');
+    
+    // If trying to open logs, check auth first
+    if (!body.classList.contains('log-open')) {
+      if (!(await checkAuthWithPrompt('view memory logs'))) {
+        return;
+      }
+    }
+    
+    body.classList.toggle('log-open');
+    
+    if (body.classList.contains('log-open')) {
+        chevron.style.transform = 'rotate(180deg)';
+        fetchMemoryLogs(true);
+        startMemoryAutoRefresh();
+    } else {
+        chevron.style.transform = 'rotate(0deg)';
+        stopMemoryAutoRefresh();
+    }
+};
+
+// Update manual refresh button
+document.getElementById('refreshMemory').onclick = async (e) => {
     e.stopPropagation();
-    fetchMemoryLogs(true); // Show status when manually refreshed AND scroll to top
+    if (await checkAuthWithPrompt('refresh memory logs')) {
+      fetchMemoryLogs(true);
+    }
 };
 </script>
 </body>

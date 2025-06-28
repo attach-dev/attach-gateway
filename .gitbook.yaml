@@ -1,0 +1,70 @@
+# GitBook Configuration
+# This file configures GitBook to display the documentation structure
+# based on the content in the docs/ folder
+
+# Basic GitBook configuration
+gitbook: 3.x.x
+
+# Root directory for documentation
+root: ./docs/
+
+# Structure configuration
+structure:
+  # Use design.md as the main README
+  readme: design.md
+  
+  # Use SUMMARY.md for navigation structure
+  summary: SUMMARY.md
+
+# Plugin configuration
+plugins:
+  - search
+  - github
+  - edit-link
+  - sharing
+  - fontsettings
+  - theme-default
+
+# Plugin settings
+pluginsConfig:
+  github:
+    url: https://github.com/attach-dev/attach-gateway
+  
+  edit-link:
+    base: https://github.com/attach-dev/attach-gateway/edit/main/docs
+    label: Edit This Page
+  
+  sharing:
+    facebook: false
+    twitter: true
+    google: false
+    github: true
+    github_url: https://github.com/attach-dev/attach-gateway
+    all:
+      - facebook
+      - google
+      - twitter
+      - github
+
+# PDF generation options
+pdf:
+  pageNumbers: true
+  fontSize: 12
+  fontFamily: "Arial"
+  paperSize: "a4"
+  margin:
+    top: 56
+    bottom: 56
+    right: 62
+    left: 62
+
+# Book metadata
+title: "Attach Gateway Documentation"
+description: "Identity & Memory side-car for every LLM engine and multi-agent framework"
+author: "Attach Team"
+language: "en"
+
+# Variables that can be used in content
+variables:
+  version: "0.1"
+  repository: "https://github.com/attach-dev/attach-gateway"
