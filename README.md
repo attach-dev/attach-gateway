@@ -61,7 +61,9 @@ git clone https://github.com/attach-dev/attach-gateway.git && cd attach-gateway
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
+
 # 1) start memory in Docker (background tab)
+
 python script/start_weaviate.py &
 
 # 2) export your short‑lived token
@@ -167,6 +169,7 @@ flowchart TD
 ## Live two‑agent demo
 
 ```bash
+
 # pane 1 – memory (Docker)
 python script/start_weaviate.py
 
