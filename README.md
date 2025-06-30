@@ -11,7 +11,7 @@ LLM engines such as **Ollama** or **vLLM** ship with **zero auth**.  Agent‑to�
 **Attach Gateway** is that missing resource‑server:
 
 *   ✅ Verifies **OIDC / JWT** or **DID‑JWT**
-*   ✅ Stamps `X‑ATTACH‑User` + `X‑ATTACH‑Session` headers so every downstream agent/tool sees the same identity
+*   ✅ Stamps `X‑Attach‑User` + `X‑Attach‑Session` headers so every downstream agent/tool sees the same identity
 *   ✅ Implements `/a2a/tasks/send` + `/tasks/status` for Google A2A & OpenHands hand‑off
 *   ✅ Mirrors prompts & responses to a memory backend (Weaviate Docker container by default)
 *   ✅ Workflow traces (Temporal)
