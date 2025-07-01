@@ -10,3 +10,8 @@ __pyo3*.so
 token.txt
 attach_gateway.tar.gz~/
 .pypirc
+.openai/
+.weaviate/
+.DS_Store.DS_Store
+.DS_Store?
+**/.DS_Store
