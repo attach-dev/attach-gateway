@@ -28,26 +28,6 @@ Attach Gateway forwards both calls to the chosen agent, adds the Attach headers,
 
 ## 1 · Planner → Coder flow (with memory)
 
-{% mermaid %}
-sequenceDiagram
-    participant UI   as Browser
-    participant GW   as Attach Gateway
-    participant PL   as Planner Agent
-    participant CD   as Coder Agent
-    participant WV   as Weaviate
-
-    UI ->> GW: POST /a2a/tasks/send { messages:[…], target:"planner" }
-    Note right of UI: Authorization: Bearer JWT
-    GW ->> PL: same body + X‑Attach‑User / Session
-    PL ->> WV: MemoryEvent(role=planner, content=plan)
-    PL -->> GW: { mem_id:123, plan:"…" }
-    GW ->> CD: POST /a2a/tasks/send { mem_id:123, … }
-    CD ->> WV: fetch plan 123
-    CD ->> WV: MemoryEvent(role=coder, content=answer)
-    CD -->> GW: TaskStatus(state="done", result=answer)
-    GW -->> UI: state="done"
-{% endmermaid %}
-
 ```mermaid
 sequenceDiagram
     participant UI   as Browser
