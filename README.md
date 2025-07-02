@@ -2,6 +2,8 @@
 
 > **Identity & Memory side‑car** for every LLM engine and multi‑agent framework. Add OIDC / DID SSO, A2A hand‑off, and a pluggable memory bus (Weaviate today) – all with one process.
 
+[![PyPI](https://img.shields.io/pypi/v/attach-dev.svg)](https://pypi.org/project/attach-dev/)
+
 ---
 
 ## Why it exists
