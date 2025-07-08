@@ -14,9 +14,11 @@ from a2a.routes import router as a2a_router
 # Clean relative imports
 from auth import verify_jwt
 from auth.oidc import _require_env
-#from logs import router as logs_router
+
+# from logs import router as logs_router
 from mem import get_memory_backend
 from middleware.auth import jwt_auth_mw
+from middleware.quota import TokenQuotaMiddleware
 from middleware.session import session_mw
 from proxy.engine import router as proxy_router
 
@@ -130,11 +132,12 @@ def create_app(config: Optional[AttachConfig] = None) -> FastAPI:
     # Add middleware
     app.middleware("http")(jwt_auth_mw)
     app.middleware("http")(session_mw)
+    app.add_middleware(TokenQuotaMiddleware)
 
     # Add routes
     app.include_router(a2a_router)
     app.include_router(proxy_router)
-    #app.include_router(logs_router)
+    # app.include_router(logs_router)
     app.include_router(mem_router)
 
     # Setup memory backend
