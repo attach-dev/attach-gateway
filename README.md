@@ -234,6 +234,17 @@ curl -X POST /v1/logs \
 # => HTTP/1.1 202 Accepted
 ```
 
+## Token quotas
+
+Attach Gateway can enforce per-user token limits. Install the optional
+dependency with `pip install attach-gateway[quota]` and set
+`MAX_TOKENS_PER_MIN` in your environment to enable the middleware. The
+counter defaults to the `cl100k_base` encoding; override with
+`QUOTA_ENCODING` if your model uses a different tokenizer. The default
+in-memory store works in a single process and is not shared between
+workers—requests retried across processes may be double-counted. Use Redis
+for production deployments.
+
 ## Roadmap
 
 * **v0.2** — Protected‑resource metadata endpoint (OAuth 2.1), enhanced DID resolvers.  
