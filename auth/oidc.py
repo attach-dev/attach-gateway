@@ -8,6 +8,9 @@ from typing import Any
 import httpx
 from jose import jwt
 
+from dotenv import load_dotenv
+load_dotenv()
+
 # ---------------------------------------------------------------------------
 
 ACCEPTED_ALGS: set[str] = {"RS256", "ES256"}
@@ -163,7 +166,7 @@ def _verify_jwt_direct(token: str, *, leeway: int = 60) -> dict[str, Any]:
     )
 
 
-async def _verify_jwt_with_exchange(token: str: str, *, leeway: int = 60) -> dict[str, Any]:
+async def _verify_jwt_with_exchange(token: str, *, leeway: int = 60) -> dict[str, Any]:
     """
     Exchange an external JWT for a Descope token and verify it.
     """ 
@@ -178,7 +181,7 @@ async def _verify_jwt_with_exchange(token: str: str, *, leeway: int = 60) -> dic
 # --------------------------------------------------------------------------- #
 # Public API                                                                  #
 # --------------------------------------------------------------------------- #
-def verify_jwt(token: str, *, leeway: int = 60) -> dict[str, Any]:
+async def verify_jwt(token: str, *, leeway: int = 60) -> dict[str, Any]:
     """
     Verify OIDC JWT - expects Descope tokens, exchanges external tokens.
     """
