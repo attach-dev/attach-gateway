@@ -66,10 +66,50 @@ def _jwks(issuer: str) -> list[dict[str, Any]]:
     return cached["keys"]
 
 
-# --------------------------------------------------------------------------- #
-# Public API                                                                  #
-# --------------------------------------------------------------------------- #
-def verify_jwt(token: str, *, leeway: int = 60) -> dict[str, Any]:
+async def _exchange_jwt_descope(
+    external_jwt: str,
+    external_issuer: str,
+    # all optional for now - defaults are from original jwt
+    # options: request / original / merged
+    aud_src: Optional[str] = "original",
+    scope_src: Optional[str] = "original",
+    custom_claims_src: Optional[str] = "original",
+) -> str:
+    """
+    Exchange an external JWT for a Descope token using inbound app token endpoint.
+    """
+    descope_base_url = os.getenv("DESCOPE_BASE_URL", "https://api.descope.com")
+    descope_project_id = os.getenv("DESCOPE_PROJECT_ID")
+    descope_client_id = os.getenv("DESCOPE_CLIENT_ID")
+    descope_client_secret = os.getenv("DESCOPE_CLIENT_SECRET") # (not sure if need yet)
+
+    token_endpoint = f"{descope_base_url}/oauth2/v1/apps/token" 
+
+    grant_data = {
+        "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        "assertion": external_jwt,
+        "client_id": descope_client_id,
+        "client_secret": descope_client_secret,
+        "audience_src": aud_src, 
+    }
+
+    if scope_src: 
+        grant_data["scope_source"] = scope_src # if specified, use to determine scopes
+
+    if custom_claims_src:
+        grant_data["custom_claims_source"] = custom_claims_src # if specified, use to determine claims
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            token_endpoint,
+            data=grant_data,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        response.raise_for_status()
+        return response.json()["access_token"]
+
+
+def _verify_jwt_direct(token: str, *, leeway: int = 60) -> dict[str, Any]:
     """
     Validate a client-supplied JWT.
 
@@ -121,3 +161,31 @@ def verify_jwt(token: str, *, leeway: int = 60) -> dict[str, Any]:
             "verify_iat": True,
         },
     )
+
+
+async def _verify_jwt_with_exchange(token: str: str, *, leeway: int = 60) -> dict[str, Any]:
+    """
+    Exchange an external JWT for a Descope token and verify it.
+    """ 
+    unverified_claims = jwt.get_unverified_claims(token)
+    external_issuer = unverified_claims.get("iss")
+
+    descope_token = await _exchange_jwt_descope(token, external_issuer)
+
+    return _verify_jwt_direct(descope_token, leeway=leeway)
+
+
+# --------------------------------------------------------------------------- #
+# Public API                                                                  #
+# --------------------------------------------------------------------------- #
+def verify_jwt(token: str, *, leeway: int = 60) -> dict[str, Any]:
+    """
+    Verify OIDC JWT - expects Descope tokens, exchanges external tokens.
+    """
+    try: 
+        return _verify_jwt_direct(token, leeway=leeway)
+    except Exception:
+        try:
+            return await _verify_jwt_with_exchange(token, leeway=leeway)
+        except Exception as e:
+            raise ValueError(f"JWT verification failed: {e}") from e
