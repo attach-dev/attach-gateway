@@ -74,9 +74,9 @@ async def _exchange_jwt_descope(
     external_issuer: str,
     # all optional for now - defaults are from original jwt
     # options: request / original / merged
-    aud_src: Optional[str] = "original",
-    scope_src: Optional[str] = "original",
-    custom_claims_src: Optional[str] = "original",
+    aud_src: Optional[str] = None,
+    scope_src: Optional[str] = None,
+    custom_claims_src: Optional[str] = None, # default empty
 ) -> str:
     """
     Exchange an external JWT for a Descope token using inbound app token endpoint.
@@ -93,15 +93,16 @@ async def _exchange_jwt_descope(
         "assertion": external_jwt,
         "client_id": descope_client_id,
         "client_secret": descope_client_secret,
-        "audience_src": aud_src, 
     }
 
+    """
     if scope_src: 
         grant_data["scope_source"] = scope_src # if specified, use to determine scopes
 
     if custom_claims_src:
         grant_data["custom_claims_source"] = custom_claims_src # if specified, use to determine claims
-
+    """
+    
     async with httpx.AsyncClient() as client:
         response = await client.post(
             token_endpoint,
