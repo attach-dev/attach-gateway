@@ -184,10 +184,17 @@ async def verify_jwt(token: str, *, leeway: int = 60) -> dict[str, Any]:
     """
     Verify OIDC JWT - expects Descope tokens, exchanges external tokens.
     """
-    try: 
-        return _verify_jwt_direct(token, leeway=leeway)
-    except Exception:
+    oidc_issuer = os.getenv("OIDC_ISSUER")
+    if "auth0" in oidc_issuer.lower():
         try:
             return await _verify_jwt_with_exchange(token, leeway=leeway)
         except Exception as e:
             raise ValueError(f"JWT verification failed: {e}") from e
+    else:
+        try: 
+            return _verify_jwt_direct(token, leeway=leeway)
+        except Exception:
+            try:
+                return await _verify_jwt_with_exchange(token, leeway=leeway)
+            except Exception as e:
+                raise ValueError(f"JWT verification failed: {e}") from e
