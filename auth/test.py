@@ -12,11 +12,19 @@ from dotenv import load_dotenv
 load_dotenv()
 from oidc import verify_jwt, _exchange_jwt_descope
 
+async def test_verify_jwt():
+    """Test full verify JWT process."""
+    print("Testing JWT verification...")
+    try:
+        token = await get_auth0_token()
+        claims = await verify_jwt(token)
+        print("✓ JWT verification successful")
+        print(f"   Claims: {json.dumps(claims, indent=2)}")
+    except Exception as e:
+        print(f"✗ JWT verification failed: {e}")
+
 
 async def test_token_exchange():
-    """
-    Test the inbound app exchange functionality.
-    """
     """Test token exchange with freshly obtained Auth0 token."""
     
     print("Getting Auth0 token...")
@@ -82,9 +90,7 @@ async def test_token_exchange():
 
 
 async def get_auth0_token() -> str:
-    """
-    Get a test token from Auth0 for testing purposes.
-    """
+    """Get a test token from Auth0 for testing purposes."""
     auth0_domain = os.getenv("AUTH0_DOMAIN")
     auth0_client_id = os.getenv("AUTH0_CLIENT_ID")  
     auth0_client_secret = os.getenv("AUTH0_CLIENT_SECRET")  
@@ -111,4 +117,4 @@ async def get_auth0_token() -> str:
         return result["access_token"]
 
 
-asyncio.run(test_token_exchange())
+asyncio.run(test_verify_jwt())
