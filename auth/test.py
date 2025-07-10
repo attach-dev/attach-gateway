@@ -49,7 +49,6 @@ async def test_token_exchange():
         descope_token = await _exchange_jwt_descope(
             external_jwt=auth0_token,
             external_issuer=f"https://{os.getenv('AUTH0_DOMAIN')}/",
-            aud_src="original"
         )
         print("✓ Token exchange successful")
         print(f"   Descope token: {descope_token[:50]}...")

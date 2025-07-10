@@ -74,9 +74,9 @@ async def _exchange_jwt_descope(
     external_issuer: str,
     # all optional for now - defaults are from original jwt
     # options: request / original / merged
-    aud_src: Optional[str] = None,
-    scope_src: Optional[str] = None,
-    custom_claims_src: Optional[str] = None, # default empty
+    aud_src: Optional[str] = "original", 
+    scope_src: Optional[str] = "original",
+    custom_claims_src: Optional[str] = "original", 
 ) -> str:
     """
     Exchange an external JWT for a Descope token using inbound app token endpoint.
@@ -85,23 +85,17 @@ async def _exchange_jwt_descope(
     descope_project_id = os.getenv("DESCOPE_PROJECT_ID")
     descope_client_id = os.getenv("DESCOPE_CLIENT_ID")
     descope_client_secret = os.getenv("DESCOPE_CLIENT_SECRET") # (not sure if need yet)
+    external_issuer = os.getenv("OIDC_ISSUER") # part of grant req?
 
     token_endpoint = f"{descope_base_url}/oauth2/v1/apps/token" 
 
     grant_data = {
-        "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",  
         "assertion": external_jwt,
         "client_id": descope_client_id,
         "client_secret": descope_client_secret,
+        "issuer": external_issuer,
     }
-
-    """
-    if scope_src: 
-        grant_data["scope_source"] = scope_src # if specified, use to determine scopes
-
-    if custom_claims_src:
-        grant_data["custom_claims_source"] = custom_claims_src # if specified, use to determine claims
-    """
     
     async with httpx.AsyncClient() as client:
         response = await client.post(
@@ -109,6 +103,10 @@ async def _exchange_jwt_descope(
             data=grant_data,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
+
+        print(f"   Response Status: {response.status_code}")
+        print(f"   Response Body: {response.text}")
+            
         response.raise_for_status()
         return response.json()["access_token"]
 
