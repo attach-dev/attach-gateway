@@ -84,7 +84,7 @@ uvicorn main:app --port 8080 &
 
 # 4) make a protected Ollama call via the gateway
 curl -H "Authorization: Bearer $JWT" \
-     -d '{"model":"tinyllama","prompt":"hello"}' \
+     -d '{"model":"tinyllama","messages":[{"role":"user","content":"hello"}]}' \
     http://localhost:8080/api/chat | jq .
 ```
 
@@ -232,6 +232,30 @@ curl -X POST /v1/logs \
      -H "Authorization: Bearer $JWT" \
      -d '{"run_id":"abc","level":"info","message":"hi"}'
 # => HTTP/1.1 202 Accepted
+```
+
+## Token quotas
+
+Attach Gateway can enforce per-user token limits. Install the optional
+dependency with `pip install attach-gateway[quota]` and set
+`MAX_TOKENS_PER_MIN` in your environment to enable the middleware. The
+counter defaults to the `cl100k_base` encoding; override with
+`QUOTA_ENCODING` if your model uses a different tokenizer. The default
+in-memory store works in a single process and is not shared between
+workers—requests retried across processes may be double-counted. Use Redis
+for production deployments.
+
+### Enable token quotas
+
+```bash
+# Optional: Enable token quotas
+export MAX_TOKENS_PER_MIN=60000
+pip install tiktoken  # or pip install attach-gateway[quota]
+```
+
+To customize the tokenizer:
+```bash
+export QUOTA_ENCODING=cl100k_base  # default
 ```
 
 ## Roadmap
