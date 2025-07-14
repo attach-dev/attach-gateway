@@ -16,9 +16,15 @@ if "MemoryEvent" not in classes:
     print("⚠️  No MemoryEvent class yet (run a chat first)")
     exit(0)
 
+print("📋 MemoryEvent schema:")
+schema = client.schema.get("MemoryEvent")
+for prop in schema.get("properties", []):
+    print(f"  - {prop['name']} ({prop['dataType']})")
+print()
+
 # Fetch the last 10 events, newest first
 result = (
-    client.query.get("MemoryEvent", ["timestamp", "role", "content"])
+    client.query.get("MemoryEvent", ["timestamp", "event", "user"])  # Fields that actually exist
     .with_additional(["id"])
     .with_limit(10)
     .do()

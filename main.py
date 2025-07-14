@@ -11,9 +11,15 @@ from auth.oidc import verify_jwt  # Fixed: was auth.jwt, now auth.oidc
 from logs import router as logs_router
 from mem import write as mem_write  # Import memory write function
 from middleware.auth import jwt_auth_mw  # ← your auth middleware
-from middleware.quota import TokenQuotaMiddleware
 from middleware.session import session_mw  # ← generates session-id header
-from proxy import router as proxy_router
+from proxy.engine import router as proxy_router
+
+# At the top, make the import conditional
+try:
+    from middleware.quota import TokenQuotaMiddleware
+    QUOTA_AVAILABLE = True
+except ImportError:
+    QUOTA_AVAILABLE = False
 
 # Memory router
 mem_router = APIRouter(prefix="/mem", tags=["memory"])
@@ -57,16 +63,15 @@ async def get_memory_events(request: Request, limit: int = 10):
 
         # Query with descending order by timestamp (newest first)
         result = (
-            client.query.get("MemoryEvent", ["timestamp", "role", "content"])
+            client.query.get(
+                "MemoryEvent",
+                ["timestamp", "event", "user", "state"]      # <-- adjust
+            )
             .with_additional(["id"])
             .with_limit(limit)
-            .with_sort(
-                [{"path": ["timestamp"], "order": "desc"}]
-            )  # Add descending sort
+            .with_sort([{"path": ["timestamp"], "order": "desc"}])
             .do()
         )
-
-        print(f"🔍 Raw query result: {result}")
 
         # Check for GraphQL errors like demo_view_memory.py does
         if "errors" in result:
@@ -123,16 +128,24 @@ async def get_memory_events(request: Request, limit: int = 10):
 
 
 middlewares = [
-    # ❶ Auth first (executes first at request time)
+    # ❶ CORS first (so it executes last and handles responses properly)
+    Middleware(CORSMiddleware,
+               allow_origins=["http://localhost:9000", "http://127.0.0.1:9000"],
+               allow_methods=["*"],
+               allow_headers=["*"],
+               allow_credentials=True),
+    # ❷ Auth middleware
     Middleware(BaseHTTPMiddleware, dispatch=jwt_auth_mw),
-    # ❷ Session id second (executes after auth; sub is now available)
+    # ❸ Session middleware  
     Middleware(BaseHTTPMiddleware, dispatch=session_mw),
-    # ❸ Token quota third
-    Middleware(TokenQuotaMiddleware),
 ]
 
-app = FastAPI(title="attach-gateway", middleware=middlewares)
+# Only add quota middleware if tiktoken is available AND user configured it
+if QUOTA_AVAILABLE and os.getenv("MAX_TOKENS_PER_MIN"):
+    middlewares.append(Middleware(TokenQuotaMiddleware))
 
+# Create app without middleware first
+app = FastAPI(title="attach-gateway", middleware=middlewares)
 
 @app.get("/auth/config")
 async def auth_config():
@@ -142,15 +155,8 @@ async def auth_config():
         "audience": os.getenv("OIDC_AUD"),
     }
 
-
+# Add middleware after routes are defined
 app.include_router(a2a_router, prefix="/a2a")
 app.include_router(logs_router)
 app.include_router(mem_router)
-app.include_router(proxy_router)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:9000", "http://127.0.0.1:9000"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-    allow_credentials=True,
-)
+app.include_router(proxy_router)  # ← ADD THIS BACK
