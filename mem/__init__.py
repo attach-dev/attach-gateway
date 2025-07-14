@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 # mem/__init__.py
 
 import asyncio
 import os
-from typing import Protocol
+from typing import Protocol, Optional, Union
 
 
 class MemoryBackend(Protocol):
@@ -17,7 +19,7 @@ class NullMemory:
         return None
 
 
-def _build_backend(kind: str | None = None, config=None) -> MemoryBackend:
+def _build_backend(kind: Optional[str] = None, config=None) -> MemoryBackend:
     kind = (kind or os.getenv("MEM_BACKEND", "none")).lower()
 
     if kind == "weaviate":
@@ -32,7 +34,7 @@ def _build_backend(kind: str | None = None, config=None) -> MemoryBackend:
 
 
 # --- lazy singleton ---------------------------------------------------------
-_memory: MemoryBackend | None = None
+_memory: Optional[MemoryBackend] = None
 
 
 def _get_backend() -> MemoryBackend:

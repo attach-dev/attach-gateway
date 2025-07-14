@@ -619,36 +619,29 @@ function refreshLogsDisplay(scrollToTop = false) {
 function renderMemoryEvent(event) {
   const logEntry = document.createElement('div');
   logEntry.className = 'border-b border-gray-600 pb-2 mb-2';
-  logEntry.dataset.eventId = event._additional.id;
   
-  // Create a more readable format
   const timestamp = new Date(event.timestamp).toLocaleTimeString();
   const id = event._additional.id.substring(0, 8);
   
   let displayContent = '';
-  let eventType = 'unknown';
-  let model = 'unknown';
+  let eventType = event.event || 'unknown';
   
-  // Check if this is a rich event with result data
-  if (event.result?.choices?.[0]?.message?.content) {
-    const message = event.result.choices[0].message.content;
-    displayContent = message.length > 200 ? message.substring(0, 200) + '...' : message;
-    model = event.result.model || 'unknown';
-    eventType = 'response';
-  } else if (event.content) {
-    displayContent = event.content.length > 200 ? event.content.substring(0, 200) + '...' : event.content;
-    eventType = 'content';
-  } else if (event.event) {
-    displayContent = `[${event.event}]`;
-    eventType = event.event;
+  if (event.event === 'task_sent' && event.payload?.messages?.[0]?.content) {
+    // Show the user's message from payload
+    displayContent = `User: ${event.payload.messages[0].content}`;
+    eventType = 'task_sent';
+  } else if (event.event === 'task_result' && event.result?.choices?.[0]?.message?.content) {
+    // Show the AI response from result
+    displayContent = event.result.choices[0].message.content;
+    eventType = 'task_result';
   } else {
-    displayContent = '[No content available]';
+    displayContent = `[${event.event}] - Click to expand`;
   }
   
   // Color code by event type
   let headerColor = 'text-blue-300';
-  if (eventType === 'response') headerColor = 'text-green-300';
-  else if (eventType === 'content') headerColor = 'text-cyan-300';
+  if (eventType === 'task_sent') headerColor = 'text-blue-300';
+  else if (eventType === 'task_result') headerColor = 'text-green-300';
   
   // Check if this event should be expanded
   const isExpanded = expandedEventIds.has(event._additional.id);
@@ -657,14 +650,14 @@ function renderMemoryEvent(event) {
     logEntry.classList.add('expanded');
     logEntry.innerHTML = `
       <div class="${headerColor} text-xs font-bold">
-        ${timestamp} [${id}] ${model} (${eventType}) - EXPANDED
+        ${timestamp} [${id}] ${eventType} - EXPANDED
       </div>
       <pre class="text-gray-300 pl-2 whitespace-pre-wrap text-xs overflow-hidden max-h-60 overflow-y-auto">${JSON.stringify(event, null, 2)}</pre>
     `;
   } else {
     logEntry.innerHTML = `
       <div class="${headerColor} text-xs font-bold">
-        ${timestamp} [${id}] ${model} (${eventType})
+        ${timestamp} [${id}] ${eventType}
       </div>
       <div class="text-gray-300 pl-2 text-xs leading-relaxed">${displayContent.replace(/\n/g, ' ')}</div>
     `;
@@ -680,7 +673,7 @@ function renderMemoryEvent(event) {
       expandedEventIds.delete(eventId);
       logEntry.innerHTML = `
         <div class="${headerColor} text-xs font-bold">
-          ${timestamp} [${id}] ${model} (${eventType})
+          ${timestamp} [${id}] ${eventType}
         </div>
         <div class="text-gray-300 pl-2 text-xs leading-relaxed">${displayContent.replace(/\n/g, ' ')}</div>
       `;
@@ -690,7 +683,7 @@ function renderMemoryEvent(event) {
       expandedEventIds.add(eventId);
       logEntry.innerHTML = `
         <div class="${headerColor} text-xs font-bold">
-          ${timestamp} [${id}] ${model} (${eventType}) - EXPANDED
+          ${timestamp} [${id}] ${eventType} - EXPANDED
         </div>
         <pre class="text-gray-300 pl-2 whitespace-pre-wrap text-xs overflow-hidden max-h-60 overflow-y-auto">${JSON.stringify(event, null, 2)}</pre>
       `;
