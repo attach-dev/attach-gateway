@@ -234,6 +234,18 @@ curl -X POST /v1/logs \
 # => HTTP/1.1 202 Accepted
 ```
 
+## Usage hooks
+
+Emit token usage metrics for every request. Choose a backend via
+`USAGE_BACKEND`:
+
+```bash
+export USAGE_BACKEND=prometheus  # or openmeter/null
+```
+
+A Prometheus counter `attach_usage_tokens_total{user,direction,model}` is
+exposed for Grafana dashboards.
+
 ## Token quotas
 
 Attach Gateway can enforce per-user token limits. Install the optional
@@ -244,6 +256,9 @@ counter defaults to the `cl100k_base` encoding; override with
 in-memory store works in a single process and is not shared between
 workers—requests retried across processes may be double-counted. Use Redis
 for production deployments.
+If `tiktoken` is missing, a byte-count fallback is used which counts about
+four times more tokens than the `cl100k` tokenizer – install `tiktoken` in
+production.
 
 ### Enable token quotas
 

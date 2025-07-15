@@ -13,10 +13,12 @@ from mem import write as mem_write  # Import memory write function
 from middleware.auth import jwt_auth_mw  # ← your auth middleware
 from middleware.session import session_mw  # ← generates session-id header
 from proxy.engine import router as proxy_router
+from usage.factory import get_usage_backend
 
 # At the top, make the import conditional
 try:
     from middleware.quota import TokenQuotaMiddleware
+
     QUOTA_AVAILABLE = True
 except ImportError:
     QUOTA_AVAILABLE = False
@@ -55,7 +57,7 @@ async def get_memory_events(request: Request, limit: int = 10):
         result = (
             client.query.get(
                 "MemoryEvent",
-                ["timestamp", "event", "user", "state"]
+                ["timestamp", "event", "user", "state"],
             )
             .with_additional(["id"])
             .with_limit(limit)
@@ -110,14 +112,16 @@ async def get_memory_events(request: Request, limit: int = 10):
 
 middlewares = [
     # ❶ CORS first (so it executes last and handles responses properly)
-    Middleware(CORSMiddleware,
-               allow_origins=["http://localhost:9000", "http://127.0.0.1:9000"],
-               allow_methods=["*"],
-               allow_headers=["*"],
-               allow_credentials=True),
+    Middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:9000", "http://127.0.0.1:9000"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+        allow_credentials=True,
+    ),
     # ❷ Auth middleware
     Middleware(BaseHTTPMiddleware, dispatch=jwt_auth_mw),
-    # ❸ Session middleware  
+    # ❸ Session middleware
     Middleware(BaseHTTPMiddleware, dispatch=session_mw),
 ]
 
@@ -127,6 +131,8 @@ if QUOTA_AVAILABLE and os.getenv("MAX_TOKENS_PER_MIN"):
 
 # Create app without middleware first
 app = FastAPI(title="attach-gateway", middleware=middlewares)
+app.state.usage = get_usage_backend(os.getenv("USAGE_BACKEND", "null"))
+
 
 @app.get("/auth/config")
 async def auth_config():
@@ -135,6 +141,7 @@ async def auth_config():
         "client_id": os.getenv("AUTH0_CLIENT"),
         "audience": os.getenv("OIDC_AUD"),
     }
+
 
 # Add middleware after routes are defined
 app.include_router(a2a_router, prefix="/a2a")
