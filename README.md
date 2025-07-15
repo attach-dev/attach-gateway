@@ -50,7 +50,7 @@ attach-gateway --port 8080 &
 
 # 4) make a protected Ollama call via the gateway
 curl -H "Authorization: Bearer $JWT" \
-     -d '{"model":"tinyllama","prompt":"hello"}' \
+     -d '{"model":"tinyllama","messages":[{"role":"user","content":"hello"}]}' \
     http://localhost:8080/api/chat | jq .
 ```
 
