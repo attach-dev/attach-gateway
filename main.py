@@ -14,6 +14,7 @@ from middleware.auth import jwt_auth_mw  # ← your auth middleware
 from middleware.session import session_mw  # ← generates session-id header
 from proxy.engine import router as proxy_router
 from usage.factory import get_usage_backend
+from usage.metrics import mount_metrics
 
 # At the top, make the import conditional
 try:
@@ -132,6 +133,7 @@ if QUOTA_AVAILABLE and os.getenv("MAX_TOKENS_PER_MIN"):
 # Create app without middleware first
 app = FastAPI(title="attach-gateway", middleware=middlewares)
 app.state.usage = get_usage_backend(os.getenv("USAGE_BACKEND", "null"))
+mount_metrics(app)
 
 
 @app.get("/auth/config")

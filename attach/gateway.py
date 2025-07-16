@@ -22,6 +22,7 @@ from middleware.quota import TokenQuotaMiddleware
 from middleware.session import session_mw
 from proxy.engine import router as proxy_router
 from usage.factory import get_usage_backend
+from usage.metrics import mount_metrics
 
 # Import version from parent package
 from . import __version__
@@ -129,6 +130,7 @@ def create_app(config: Optional[AttachConfig] = None) -> FastAPI:
         description="Identity & Memory side-car for LLM engines",
         version=__version__,
     )
+    mount_metrics(app)
 
     # Add middleware
     app.middleware("http")(jwt_auth_mw)

@@ -246,6 +246,12 @@ export USAGE_BACKEND=prometheus  # or openmeter/null
 A Prometheus counter `attach_usage_tokens_total{user,direction,model}` is
 exposed for Grafana dashboards.
 
+### Scraping metrics
+
+```bash
+curl http://localhost:8080/metrics
+```
+
 ## Token quotas
 
 Attach Gateway can enforce per-user token limits. Install the optional
