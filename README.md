@@ -246,10 +246,21 @@ export USAGE_BACKEND=prometheus  # or openmeter/null
 A Prometheus counter `attach_usage_tokens_total{user,direction,model}` is
 exposed for Grafana dashboards.
 
+> **⚠️ Usage hooks depend on the quota middleware.**  
+> Make sure `MAX_TOKENS_PER_MIN` is set (any positive number) so the  
+> `TokenQuotaMiddleware` is enabled; the middleware is what records usage  
+> events that feed Prometheus.
+
+```bash
+# Enable usage tracking (set any reasonable limit)
+export MAX_TOKENS_PER_MIN=60000
+export USAGE_BACKEND=prometheus
+```
+
 ### Scraping metrics
 
 ```bash
-curl http://localhost:8080/metrics
+curl -H "Authorization: Bearer $JWT" http://localhost:8080/metrics
 ```
 
 ## Token quotas

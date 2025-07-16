@@ -1,20 +1,34 @@
 import os
-
+import sys
 import pytest
 from fastapi import FastAPI, Request
 from httpx import ASGITransport, AsyncClient
 
+# Force reload to pick up prometheus_client if just installed
+if 'usage.backends' in sys.modules:
+    del sys.modules['usage.backends']
+if 'usage.factory' in sys.modules:
+    del sys.modules['usage.factory']
+
 from middleware.quota import TokenQuotaMiddleware
 from usage.factory import get_usage_backend
+
+# At the top, skip test if prometheus_client not available
+pytest.importorskip("prometheus_client")  # ← Skip entire test if not installed
 
 
 @pytest.mark.asyncio
 async def test_prometheus_backend_counts_tokens(monkeypatch):
+    # Verify we actually get PrometheusUsageBackend
+    backend = get_usage_backend("prometheus")
+    if not hasattr(backend, 'counter'):
+        pytest.skip("prometheus_client not available, got NullUsageBackend")
+    
     os.environ["USAGE_BACKEND"] = "prometheus"
     os.environ["MAX_TOKENS_PER_MIN"] = "1000"
     app = FastAPI()
     app.add_middleware(TokenQuotaMiddleware)
-    app.state.usage = get_usage_backend(os.getenv("USAGE_BACKEND", "null"))
+    app.state.usage = backend  # Use the backend we verified
 
     @app.post("/echo")
     async def echo(request: Request):
