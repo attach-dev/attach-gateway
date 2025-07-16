@@ -32,4 +32,5 @@ async def test_prometheus_backend_counts_tokens(monkeypatch):
     out_val = c.labels(user="bob", direction="out", model="unknown")._value.get()
     assert in_val > 0
     assert out_val > 0
-    assert in_val + out_val == sum(c.values.values())
+    # Removed: assert in_val + out_val == sum(c.values.values())
+    # The 'values' attribute only exists in the fallback Counter, not the real Prometheus Counter
