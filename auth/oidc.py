@@ -43,14 +43,40 @@ def _get_oidc_audience() -> str:
     return audience
 
 
+def _get_auth_backend() -> str:
+    """Get authentication backend from environment."""
+    backend = os.getenv("AUTH_BACKEND", "")
+    if not backend:
+        raise RuntimeError("AUTH_BACKEND must be set (see README for setup)")
+    return backend
+
+
+def _get_jwks_url(issuer: str) -> str:
+    """Get JWKS URL from environment or construct from issuer."""
+    backend = _get_auth_backend()
+
+    if backend == "descope":
+        custom_jwks = os.getenv("DESCOPE_JWKS_URL")
+        if custom_jwks:
+            return custom_jwks
+
+        project_id = _require_env("DESCOPE_PROJECT_ID")
+        return f"https://api.descope.com/{project_id}/.well-known/jwks.json"
+    else:
+        if "api.descope.com/v1/apps/" in issuer:
+            project_id = issuer.split("/")[-1] 
+            return f"https://api.descope.com/{project_id}/.well-known/jwks.json"
+        else:
+            base_url = issuer.rstrip("/")
+            return f"{base_url}/.well-known/jwks.json"
+
+
 @lru_cache(maxsize=1)
 def _fetch_jwks(issuer: str) -> dict[str, Any]:
     """
     Download the issuer's JWKS once and keep it in memory.
     """
-    # Remove trailing slash for URL construction, then add the path
-    base_url = issuer.rstrip("/")
-    url = f"{base_url}/.well-known/jwks.json"
+    url = _get_jwks_url(issuer)
 
     resp = httpx.get(url, timeout=5)
     resp.raise_for_status()
@@ -84,8 +110,7 @@ async def _exchange_jwt_descope(
     descope_base_url = os.getenv("DESCOPE_BASE_URL", "https://api.descope.com")
     descope_project_id = os.getenv("DESCOPE_PROJECT_ID")
     descope_client_id = os.getenv("DESCOPE_CLIENT_ID")
-    descope_client_secret = os.getenv("DESCOPE_CLIENT_SECRET") # (not sure if need yet)
-    external_issuer = os.getenv("OIDC_ISSUER") # part of grant req?
+    descope_client_secret = os.getenv("DESCOPE_CLIENT_SECRET") 
 
     token_endpoint = f"{descope_base_url}/oauth2/v1/apps/token" 
 
@@ -104,8 +129,8 @@ async def _exchange_jwt_descope(
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
 
-        print(f"   Response Status: {response.status_code}")
-        print(f"   Response Body: {response.text}")
+        print(f"Response Status: {response.status_code}")
+        print(f"Response Body: {response.text}")
             
         response.raise_for_status()
         return response.json()["access_token"]
@@ -182,19 +207,19 @@ async def _verify_jwt_with_exchange(token: str, *, leeway: int = 60) -> dict[str
 # --------------------------------------------------------------------------- #
 async def verify_jwt(token: str, *, leeway: int = 60) -> dict[str, Any]:
     """
-    Verify OIDC JWT - expects Descope tokens, exchanges external tokens.
+    Verify OIDC JWT - expects Descope tokens, exchanges external tokens on mixed stacks.
     """
-    oidc_issuer = os.getenv("OIDC_ISSUER")
-    if "auth0" in oidc_issuer.lower():
-        try:
-            return await _verify_jwt_with_exchange(token, leeway=leeway)
-        except Exception as e:
-            raise ValueError(f"JWT verification failed: {e}") from e
+    backend = _get_auth_backend()
+
+    if backend == "descope": 
+        # will want to verify directly
+        return _verify_jwt_direct(token, leeway=leeway)
     else:
-        try: 
+        try:
             return _verify_jwt_direct(token, leeway=leeway)
-        except Exception:
+        except Exception as direct_error:
+            print(f"Direct verification failed: {direct_error}")
             try:
                 return await _verify_jwt_with_exchange(token, leeway=leeway)
-            except Exception as e:
-                raise ValueError(f"JWT verification failed: {e}") from e
+            except Exception as exchange_error:
+                raise ValueError(f"JWT verification failed. Direct: {direct_error}, Exchange: {exchange_error}")
