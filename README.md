@@ -222,6 +222,27 @@ curl -X POST /v1/resource \
      -H "Authorization: Bearer did:key:z6Mki...<sig>.<payload>.<sig>"
 ```
 
+Example OIDC JWT request:
+```bash
+curl -X POST /v1/resource \ 
+     -H "Authorization: Bearer $JWT"
+```
+
+Other IdPs (Descope)
+To use your OIDC provider, set the following environment variables:
+```bash
+OIDC_ISSUER=<your-oidc-issuer>
+OIDC_AUD=<your-oidc-audience>
+AUTH_BACKEND=<your-authentication-provider>
+```
+Descope-specific environment variables:
+```bash
+DESCOPE_BASE_URL=https://api.descope.com or <your-descope-base-url>
+DESCOPE_PROJECT_ID=<your-descope-project-id>
+DESCOPE_CLIENT_ID=<your-descope-inbound-app-client-id>
+DESCOPE_CLIENT_SECRET=<your-descope-inbound-app-client-secret>
+```
+
 ## 💾 Memory: logs
 
 Send Sakana-formatted logs to the gateway and they will be stored as
