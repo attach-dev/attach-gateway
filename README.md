@@ -208,7 +208,7 @@ Type a request like *"Write Python to sort a list."*  The browser shows:
 
 ---
 
-### Auth core
+## Auth core
 
 `auth.verify_jwt()` accepts three token formats and routes them automatically:
 
@@ -228,7 +228,7 @@ curl -X POST /v1/resource \
      -H "Authorization: Bearer $JWT"
 ```
 
-Other IdPs (Descope)
+### Other IdPs (Descope)
 To use your OIDC provider, set the following environment variables:
 ```bash
 OIDC_ISSUER=<your-oidc-issuer>
