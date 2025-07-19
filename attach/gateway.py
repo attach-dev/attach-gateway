@@ -21,7 +21,7 @@ from middleware.auth import jwt_auth_mw
 from middleware.quota import TokenQuotaMiddleware
 from middleware.session import session_mw
 from proxy.engine import router as proxy_router
-from usage.factory import get_usage_backend
+from usage.factory import _select_backend, get_usage_backend
 from usage.metrics import mount_metrics
 
 # Import version from parent package
@@ -147,6 +147,7 @@ def create_app(config: Optional[AttachConfig] = None) -> FastAPI:
     memory_backend = get_memory_backend(config.mem_backend, config)
     app.state.memory = memory_backend
     app.state.config = config
-    app.state.usage = get_usage_backend(os.getenv("USAGE_BACKEND", "null"))
+    backend_selector = _select_backend()
+    app.state.usage = get_usage_backend(backend_selector)
 
     return app

@@ -237,14 +237,15 @@ curl -X POST /v1/logs \
 ## Usage hooks
 
 Emit token usage metrics for every request. Choose a backend via
-`USAGE_BACKEND`:
+`USAGE_METERING` (alias `USAGE_BACKEND`):
 
 ```bash
-export USAGE_BACKEND=prometheus  # or openmeter/null
+export USAGE_METERING=prometheus  # or null
 ```
 
 A Prometheus counter `attach_usage_tokens_total{user,direction,model}` is
 exposed for Grafana dashboards.
+Set `USAGE_METERING=null` (the default) to disable metering entirely.
 
 > **⚠️ Usage hooks depend on the quota middleware.**  
 > Make sure `MAX_TOKENS_PER_MIN` is set (any positive number) so the  
@@ -254,8 +255,22 @@ exposed for Grafana dashboards.
 ```bash
 # Enable usage tracking (set any reasonable limit)
 export MAX_TOKENS_PER_MIN=60000
-export USAGE_BACKEND=prometheus
+export USAGE_METERING=prometheus
 ```
+
+#### OpenMeter (Stripe / ClickHouse)
+
+```bash
+pip install "attach-gateway[usage]"
+export MAX_TOKENS_PER_MIN=60000
+export USAGE_METERING=openmeter
+export OPENMETER_API_KEY=...
+export OPENMETER_URL=http://localhost:8888   # optional self-host, defaults to https://openmeter.cloud
+```
+
+Events land in the tokens meter of OpenMeter and can sync to Stripe.
+
+The gateway runs fine without these vars; metering activates only when both USAGE_METERING=openmeter and OPENMETER_API_KEY are set.
 
 ### Scraping metrics
 
