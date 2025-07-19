@@ -38,7 +38,8 @@ memory = ["weaviate-client>=3.26.7,<4.0.0"]
 temporal = ["temporalio>=1.5.0"]
 quota = ["tiktoken>=0.5.0"]
 usage = [
-    "prometheus_client>=0.20.0"
+    "prometheus_client>=0.20.0",
+    "openmeter>=1.0.0b188,<2",  # openmeter>=1.0.0b188 requires Python >= 3.9
 ]
 dev = [
     "pytest>=8.0.0", 

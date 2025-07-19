@@ -2,7 +2,13 @@ from __future__ import annotations
 
 """Usage accounting backends for Attach Gateway."""
 
+import inspect
+import logging
+import os
+from datetime import datetime, timezone
 from typing import Protocol
+
+logger = logging.getLogger(__name__)
 
 try:
     from prometheus_client import Counter
@@ -80,7 +86,50 @@ class PrometheusUsageBackend:
 
 
 class OpenMeterBackend:
-    """Stub for future OpenMeter integration."""
+    """Send token usage events to OpenMeter."""
 
-    async def record(self, **evt) -> None:  # pragma: no cover - not implemented
-        raise NotImplementedError
+    def __init__(self) -> None:
+        try:
+            from openmeter import Client  # type: ignore
+        except Exception as exc:  # pragma: no cover - optional dep
+            raise ImportError("openmeter package is required") from exc
+
+        api_key = os.getenv("OPENMETER_API_KEY")
+        if not api_key:
+            raise ImportError("OPENMETER_API_KEY is required for OpenMeter")
+
+        url = os.getenv("OPENMETER_URL", "https://openmeter.cloud")
+        self.client = Client(api_key=api_key, base_url=url)
+
+    async def aclose(self) -> None:
+        """Close the underlying OpenMeter client."""
+        try:
+            await self.client.aclose()  # type: ignore[call-arg]
+        except Exception:  # pragma: no cover - optional
+            pass
+
+    async def record(self, **evt) -> None:
+        event = {
+            "type": "tokens",
+            "subject": evt.get("user"),
+            "project": evt.get("project"),
+            "time": datetime.now(timezone.utc)
+            .isoformat(timespec="milliseconds")
+            .replace("+00:00", "Z"),
+            "data": {
+                "tokens_in": int(evt.get("tokens_in", 0) or 0),
+                "tokens_out": int(evt.get("tokens_out", 0) or 0),
+                "model": evt.get("model"),
+            },
+        }
+
+        create_fn = self.client.events.create
+        import anyio
+
+        try:
+            if inspect.iscoroutinefunction(create_fn):
+                await create_fn(**event)  # type: ignore[arg-type]
+            else:
+                await anyio.to_thread.run_sync(create_fn, **event)
+        except Exception as exc:  # pragma: no cover - network errors
+            logger.warning("OpenMeter create failed: %s", exc)
