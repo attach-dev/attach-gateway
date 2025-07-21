@@ -406,6 +406,9 @@ class TokenQuotaMiddleware(BaseHTTPMiddleware):
 
             total = await self.store.peek_total(user)
             if total > self.max_tokens:
+                retry_after = self.window              # simple worst-case
+                response.status_code = 429
+                response.headers["Retry-After"] = str(retry_after)
                 usage["detail"] = "token quota exceeded post-stream"
 
             response.headers.update(
