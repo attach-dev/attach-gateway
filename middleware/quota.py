@@ -121,7 +121,21 @@ class TokenQuotaMiddleware(BaseHTTPMiddleware):
     def _num_tokens(self, text: str) -> int:
         return len(self.encoder.encode(text))
 
+    @staticmethod
+    def _is_monitoring_endpoint(path: str) -> bool:
+        """Monitoring endpoints that should skip token-based rate limiting."""
+        monitoring_paths = [
+            "/metrics",      # Prometheus metrics
+            "/mem/events",   # Memory events
+            "/auth/config",  # Auth configuration
+        ]
+        return any(path.startswith(p) for p in monitoring_paths)
+
     async def dispatch(self, request: Request, call_next):
+        # Skip token-based rate limiting for monitoring endpoints
+        if self._is_monitoring_endpoint(request.url.path):
+            return await call_next(request)
+            
         if not hasattr(request.app.state, "usage"):
             request.app.state.usage = NullUsageBackend()
         user = request.headers.get("x-attach-user")
