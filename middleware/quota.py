@@ -350,9 +350,14 @@ class TokenQuotaMiddleware(BaseHTTPMiddleware):
         )
 
         async def finalize() -> None:
-            nonlocal tokens_in
+            nonlocal tokens_in, oldest
             if getattr(streamer, "quota_exceeded", False):
                 usage["detail"] = "token quota exceeded mid-stream"
+                retry_after = max(0, int(self.window - (time.time() - oldest)))
+                response.status_code = 429
+                response.body_iterator = async_iter([])
+                response.headers["Retry-After"] = str(retry_after)
+                response.headers["content-type"] = "application/json"
                 usage["ts"] = time.time()
                 await request.app.state.usage.record(**usage)
                 return
@@ -411,6 +416,7 @@ class TokenQuotaMiddleware(BaseHTTPMiddleware):
                 response.status_code = 429
                 response.headers["Retry-After"] = str(retry_after)
                 usage["detail"] = "token quota exceeded post-stream"
+                response.headers["content-type"] = "application/json"
 
             response.headers.update(
                 {
