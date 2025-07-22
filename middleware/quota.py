@@ -29,6 +29,7 @@ except Exception:  # pragma: no cover
     tiktoken = None
 
 from usage.backends import NullUsageBackend
+from utils.env import int_env
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +220,7 @@ class TokenQuotaMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, store: AbstractMeterStore | None = None) -> None:
         super().__init__(app)
         self.window = int(os.getenv("WINDOW", "60"))
-        self.max_tokens = int(os.getenv("MAX_TOKENS_PER_MIN", "60000"))
+        self.max_tokens: int | None = int_env("MAX_TOKENS_PER_MIN", 60000)
         if store is not None:
             self.store = store
         else:
@@ -237,7 +238,7 @@ class TokenQuotaMiddleware(BaseHTTPMiddleware):
             *,
             user: str,
             store: AbstractMeterStore,
-            max_tokens: int,
+            max_tokens: int | None,
             is_textual: bool,
         ) -> None:
             self.iterator = iterator
@@ -317,7 +318,7 @@ class TokenQuotaMiddleware(BaseHTTPMiddleware):
         usage["tokens_in"] = tokens_in
 
         total, oldest = await self.store.adjust(user, tokens_in)
-        if total > self.max_tokens:
+        if self.max_tokens is not None and total > self.max_tokens:
             await self.store.adjust(user, -tokens_in)
             retry_after = max(0, int(self.window - (time.time() - oldest)))
             usage["ts"] = time.time()
@@ -405,8 +406,8 @@ class TokenQuotaMiddleware(BaseHTTPMiddleware):
             await self.store.adjust(user, tokens_out)
 
             total = await self.store.peek_total(user)
-            if total > self.max_tokens:
-                retry_after = self.window              # simple worst-case
+            if self.max_tokens is not None and total > self.max_tokens:
+                retry_after = self.window  # simple worst-case
                 response.status_code = 429
                 response.headers["Retry-After"] = str(retry_after)
                 usage["detail"] = "token quota exceeded post-stream"
