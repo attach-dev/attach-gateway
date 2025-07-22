@@ -15,6 +15,7 @@ from middleware.session import session_mw  # ← generates session-id header
 from proxy.engine import router as proxy_router
 from usage.factory import _select_backend, get_usage_backend
 from usage.metrics import mount_metrics
+from utils.env import int_env
 
 # At the top, make the import conditional
 try:
@@ -126,8 +127,9 @@ middlewares = [
     Middleware(BaseHTTPMiddleware, dispatch=session_mw),
 ]
 
-# Only add quota middleware if tiktoken is available AND user configured it
-if QUOTA_AVAILABLE and os.getenv("MAX_TOKENS_PER_MIN"):
+# Only add quota middleware if tiktoken is available and a positive limit is set
+limit = int_env("MAX_TOKENS_PER_MIN", 60000)
+if QUOTA_AVAILABLE and limit is not None:
     middlewares.append(Middleware(TokenQuotaMiddleware))
 
 # Create app without middleware first

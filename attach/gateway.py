@@ -23,6 +23,7 @@ from middleware.session import session_mw
 from proxy.engine import router as proxy_router
 from usage.factory import _select_backend, get_usage_backend
 from usage.metrics import mount_metrics
+from utils.env import int_env
 
 # Import version from parent package
 from . import __version__
@@ -135,7 +136,9 @@ def create_app(config: Optional[AttachConfig] = None) -> FastAPI:
     # Add middleware
     app.middleware("http")(jwt_auth_mw)
     app.middleware("http")(session_mw)
-    app.add_middleware(TokenQuotaMiddleware)
+    limit = int_env("MAX_TOKENS_PER_MIN", 60000)
+    if limit is not None:
+        app.add_middleware(TokenQuotaMiddleware)
 
     # Add routes
     app.include_router(a2a_router)
