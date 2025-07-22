@@ -268,6 +268,7 @@ class TokenQuotaMiddleware(BaseHTTPMiddleware):
                         if chunk_tokens:
                             total, _ = await self.store.adjust(self.user, chunk_tokens)
                             if total > self.limit:
+                                await self.store.adjust(self.user, -chunk_tokens)
                                 self.quota_exceeded = True
                                 logger.warning(
                                     "User %s quota breached mid-stream", self.user
@@ -354,10 +355,6 @@ class TokenQuotaMiddleware(BaseHTTPMiddleware):
             if getattr(streamer, "quota_exceeded", False):
                 usage["detail"] = "token quota exceeded mid-stream"
                 retry_after = max(0, int(self.window - (time.time() - oldest)))
-                response.status_code = 429
-                response.body_iterator = async_iter([])
-                response.headers["Retry-After"] = str(retry_after)
-                response.headers["content-type"] = "application/json"
                 usage["ts"] = time.time()
                 await request.app.state.usage.record(**usage)
                 return
