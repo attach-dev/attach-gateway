@@ -67,9 +67,8 @@ async def test_midstream_over_limit_rolls_back(monkeypatch):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.get("/stream", headers=headers)
-        text = resp.text
 
-    assert resp.status_code == 200
-    assert text == "hi"
+    assert resp.status_code == 429
+    assert resp.json()["detail"] == "token quota exceeded"
     total = await store.peek_total("carol")
     assert total == 2

@@ -282,6 +282,57 @@ class TokenQuotaMiddleware(BaseHTTPMiddleware):
         def get_tail(self) -> bytes:
             return bytes(self.tail)
 
+    class _BufferedResponse(StreamingResponse):
+        def __init__(
+            self, streamer: "TokenQuotaMiddleware._Streamer", **kwargs
+        ) -> None:
+            super().__init__(streamer, **kwargs)
+            self._streamer = streamer
+
+        async def stream_response(self, send):
+            chunks: list[bytes] = []
+            async for chunk in self._streamer:
+                chunks.append(chunk)
+            if getattr(self._streamer, "quota_exceeded", False):
+                retry_after = max(
+                    0,
+                    int(
+                        self._streamer.window
+                        - (time.time() - getattr(self._streamer, "oldest", 0))
+                    ),
+                )
+                self.status_code = 429
+                self.raw_headers = [
+                    (b"content-type", b"application/json"),
+                    (b"retry-after", str(retry_after).encode()),
+                ]
+                iterator = async_iter(
+                    [
+                        json.dumps(
+                            {
+                                "detail": "token quota exceeded",
+                                "retry_after": retry_after,
+                            }
+                        ).encode()
+                    ]
+                )
+            else:
+                iterator = async_iter(chunks)
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": self.status_code,
+                    "headers": self.raw_headers,
+                }
+            )
+            async for chunk in iterator:
+                if not isinstance(chunk, (bytes, memoryview)):
+                    chunk = chunk.encode(self.charset)
+                await send(
+                    {"type": "http.response.body", "body": chunk, "more_body": True}
+                )
+            await send({"type": "http.response.body", "body": b"", "more_body": False})
+
     async def dispatch(self, request: Request, call_next):
         if any(request.url.path.startswith(p) for p in _SKIP_PATHS):
             return await call_next(request)
@@ -340,11 +391,13 @@ class TokenQuotaMiddleware(BaseHTTPMiddleware):
             max_tokens=self.max_tokens,
             is_textual=resp_is_text,
         )
+        streamer.window = self.window
+        streamer.oldest = oldest
 
         headers = dict(resp.headers)
         headers.pop("content-length", None)
-        response = StreamingResponse(
-            content=streamer,
+        response = self._BufferedResponse(
+            streamer,
             status_code=resp.status_code,
             headers=headers,
             media_type=resp.media_type,
