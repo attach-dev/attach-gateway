@@ -89,47 +89,70 @@ class OpenMeterBackend:
     """Send token usage events to OpenMeter."""
 
     def __init__(self) -> None:
-        try:
-            from openmeter import Client  # type: ignore
-        except Exception as exc:  # pragma: no cover - optional dep
-            raise ImportError("openmeter package is required") from exc
-
         api_key = os.getenv("OPENMETER_API_KEY")
         if not api_key:
             raise ImportError("OPENMETER_API_KEY is required for OpenMeter")
 
-        url = os.getenv("OPENMETER_URL", "https://openmeter.cloud")
-        self.client = Client(api_key=api_key, base_url=url)
+        self.api_key = api_key
+        self.base_url = os.getenv("OPENMETER_URL", "https://openmeter.cloud")
+        
+        # Use httpx instead of buggy OpenMeter SDK
+        try:
+            import httpx
+            self.client = httpx.AsyncClient(
+                timeout=30.0
+            )
+        except ImportError as exc:
+            raise ImportError("httpx is required for OpenMeter") from exc
 
     async def aclose(self) -> None:
-        """Close the underlying OpenMeter client."""
-        try:
-            await self.client.aclose()  # type: ignore[call-arg]
-        except Exception:  # pragma: no cover - optional
-            pass
+        """Close the underlying HTTP client."""
+        if hasattr(self.client, 'aclose'):
+            await self.client.aclose()
 
     async def record(self, **evt) -> None:
+        try:
+            from uuid import uuid4
+        except ImportError as exc:
+            print(f"❌ UUID import failed: {exc}")
+            return
+
+        # Create event in the same format as your working curl
         event = {
+            "specversion": "1.0",
             "type": "tokens",
-            "subject": evt.get("user"),
-            "project": evt.get("project"),
+            "id": str(uuid4()),
             "time": datetime.now(timezone.utc)
             .isoformat(timespec="milliseconds")
             .replace("+00:00", "Z"),
+            "source": "attach-gateway",
+            "subject": evt.get("user"),
             "data": {
                 "tokens_in": int(evt.get("tokens_in", 0) or 0),
                 "tokens_out": int(evt.get("tokens_out", 0) or 0),
                 "model": evt.get("model"),
-            },
+            }
         }
 
-        create_fn = self.client.events.create
-        import anyio
-
         try:
-            if inspect.iscoroutinefunction(create_fn):
-                await create_fn(**event)  # type: ignore[arg-type]
+            # Use the same format as your working curl command
+            response = await self.client.post(
+                f"{self.base_url}/api/v1/events",
+                json=event,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/cloudevents+json"
+                }
+            )
+            
+            if response.status_code in [200, 201, 202, 204]:  # ← Add 204
+                try:
+                    result = response.json()
+                    logger.info("OpenMeter event sent successfully")
+                except:
+                    logger.info(f"✅ OpenMeter success (no content): HTTP {response.status_code}")
             else:
-                await anyio.to_thread.run_sync(create_fn, **event)
-        except Exception as exc:  # pragma: no cover - network errors
-            logger.warning("OpenMeter create failed: %s", exc)
+                logger.warning(f"OpenMeter error: {response.status_code}")
+                
+        except Exception as exc:
+            logger.warning("OpenMeter request failed: %s", exc)

@@ -5,6 +5,7 @@ from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from contextlib import asynccontextmanager
 
 from a2a.routes import router as a2a_router
 from auth.oidc import verify_jwt  # Fixed: was auth.jwt, now auth.oidc
@@ -132,11 +133,22 @@ limit = int_env("MAX_TOKENS_PER_MIN", 60000)
 if QUOTA_AVAILABLE and limit is not None:
     middlewares.append(Middleware(TokenQuotaMiddleware))
 
-# Create app without middleware first
-app = FastAPI(title="attach-gateway", middleware=middlewares)
-backend_selector = _select_backend()
-app.state.usage = get_usage_backend(backend_selector)
-mount_metrics(app)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan - startup and shutdown."""
+    # Startup
+    backend_selector = _select_backend()
+    app.state.usage = get_usage_backend(backend_selector)
+    mount_metrics(app)
+    
+    yield
+    
+    # Shutdown
+    if hasattr(app.state.usage, 'aclose'):
+        await app.state.usage.aclose()
+
+# Create app with lifespan
+app = FastAPI(title="attach-gateway", middleware=middlewares, lifespan=lifespan)
 
 
 @app.get("/auth/config")

@@ -9,16 +9,29 @@ from usage.factory import get_usage_backend
 from usage.metrics import mount_metrics
 
 
+def setup_module():
+    # ✅ Fixed: Use new variable name
+    os.environ["USAGE_METERING"] = "prometheus"
+
+
+@pytest.fixture
+def app():
+    app = FastAPI()
+    mount_metrics(app)
+    # ✅ Fixed: Use new variable name
+    app.state.usage = get_usage_backend(os.getenv("USAGE_METERING", "null"))
+    return app
+
+
 @pytest.mark.asyncio
 async def test_metrics_endpoint(monkeypatch):
-    os.environ["USAGE_BACKEND"] = "prometheus"
     os.environ["MAX_TOKENS_PER_MIN"] = "1000"
 
     app = FastAPI()
     mount_metrics(app)
 
     app.add_middleware(TokenQuotaMiddleware)
-    app.state.usage = get_usage_backend(os.getenv("USAGE_BACKEND", "null"))
+    app.state.usage = get_usage_backend(os.getenv("USAGE_METERING", "null"))
 
     @app.post("/echo")
     async def echo(request: Request):
