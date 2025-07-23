@@ -21,6 +21,9 @@ from middleware.auth import jwt_auth_mw
 from middleware.quota import TokenQuotaMiddleware
 from middleware.session import session_mw
 from proxy.engine import router as proxy_router
+from usage.factory import _select_backend, get_usage_backend
+from usage.metrics import mount_metrics
+from utils.env import int_env
 
 # Import version from parent package
 from . import __version__
@@ -128,11 +131,14 @@ def create_app(config: Optional[AttachConfig] = None) -> FastAPI:
         description="Identity & Memory side-car for LLM engines",
         version=__version__,
     )
+    mount_metrics(app)
 
     # Add middleware
     app.middleware("http")(jwt_auth_mw)
     app.middleware("http")(session_mw)
-    app.add_middleware(TokenQuotaMiddleware)
+    limit = int_env("MAX_TOKENS_PER_MIN", 60000)
+    if limit is not None:
+        app.add_middleware(TokenQuotaMiddleware)
 
     # Add routes
     app.include_router(a2a_router)
@@ -144,5 +150,7 @@ def create_app(config: Optional[AttachConfig] = None) -> FastAPI:
     memory_backend = get_memory_backend(config.mem_backend, config)
     app.state.memory = memory_backend
     app.state.config = config
+    backend_selector = _select_backend()
+    app.state.usage = get_usage_backend(backend_selector)
 
     return app

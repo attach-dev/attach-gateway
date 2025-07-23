@@ -5,6 +5,7 @@ from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from contextlib import asynccontextmanager
 
 from a2a.routes import router as a2a_router
 from auth.oidc import verify_jwt  # Fixed: was auth.jwt, now auth.oidc
@@ -13,10 +14,14 @@ from mem import write as mem_write  # Import memory write function
 from middleware.auth import jwt_auth_mw  # ← your auth middleware
 from middleware.session import session_mw  # ← generates session-id header
 from proxy.engine import router as proxy_router
+from usage.factory import _select_backend, get_usage_backend
+from usage.metrics import mount_metrics
+from utils.env import int_env
 
 # At the top, make the import conditional
 try:
     from middleware.quota import TokenQuotaMiddleware
+
     QUOTA_AVAILABLE = True
 except ImportError:
     QUOTA_AVAILABLE = False
@@ -55,7 +60,7 @@ async def get_memory_events(request: Request, limit: int = 10):
         result = (
             client.query.get(
                 "MemoryEvent",
-                ["timestamp", "event", "user", "state"]
+                ["timestamp", "event", "user", "state"],
             )
             .with_additional(["id"])
             .with_limit(limit)
@@ -110,23 +115,41 @@ async def get_memory_events(request: Request, limit: int = 10):
 
 middlewares = [
     # ❶ CORS first (so it executes last and handles responses properly)
-    Middleware(CORSMiddleware,
-               allow_origins=["http://localhost:9000", "http://127.0.0.1:9000"],
-               allow_methods=["*"],
-               allow_headers=["*"],
-               allow_credentials=True),
+    Middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:9000", "http://127.0.0.1:9000"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+        allow_credentials=True,
+    ),
     # ❷ Auth middleware
     Middleware(BaseHTTPMiddleware, dispatch=jwt_auth_mw),
-    # ❸ Session middleware  
+    # ❸ Session middleware
     Middleware(BaseHTTPMiddleware, dispatch=session_mw),
 ]
 
-# Only add quota middleware if tiktoken is available AND user configured it
-if QUOTA_AVAILABLE and os.getenv("MAX_TOKENS_PER_MIN"):
+# Only add quota middleware if tiktoken is available and a positive limit is set
+limit = int_env("MAX_TOKENS_PER_MIN", 60000)
+if QUOTA_AVAILABLE and limit is not None:
     middlewares.append(Middleware(TokenQuotaMiddleware))
 
-# Create app without middleware first
-app = FastAPI(title="attach-gateway", middleware=middlewares)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan - startup and shutdown."""
+    # Startup
+    backend_selector = _select_backend()
+    app.state.usage = get_usage_backend(backend_selector)
+    mount_metrics(app)
+    
+    yield
+    
+    # Shutdown
+    if hasattr(app.state.usage, 'aclose'):
+        await app.state.usage.aclose()
+
+# Create app with lifespan
+app = FastAPI(title="attach-gateway", middleware=middlewares, lifespan=lifespan)
+
 
 @app.get("/auth/config")
 async def auth_config():
@@ -135,6 +158,7 @@ async def auth_config():
         "client_id": os.getenv("AUTH0_CLIENT"),
         "audience": os.getenv("OIDC_AUD"),
     }
+
 
 # Add middleware after routes are defined
 app.include_router(a2a_router, prefix="/a2a")
