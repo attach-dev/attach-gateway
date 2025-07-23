@@ -261,16 +261,21 @@ export USAGE_METERING=prometheus
 #### OpenMeter (Stripe / ClickHouse)
 
 ```bash
-pip install "attach-gateway[usage]"
-export MAX_TOKENS_PER_MIN=60000
-export USAGE_METERING=openmeter
-export OPENMETER_API_KEY=...
-export OPENMETER_URL=http://localhost:8888   # optional self-host, defaults to https://openmeter.cloud
+# No additional dependencies needed - uses direct HTTP API
+export MAX_TOKENS_PER_MIN=60000              # Required: enables quota middleware
+export USAGE_METERING=openmeter              # Required: activates OpenMeter backend  
+export OPENMETER_API_KEY=your-api-key-here   # Required: API authentication
+export OPENMETER_URL=https://openmeter.cloud # Optional: defaults to https://openmeter.cloud
 ```
 
-Events land in the tokens meter of OpenMeter and can sync to Stripe.
+Events are sent directly to OpenMeter's HTTP API and are processed by the LLM tokens meter for billing integration with Stripe.
 
-The gateway runs fine without these vars; metering activates only when both USAGE_METERING=openmeter and OPENMETER_API_KEY are set.
+> **⚠️ All three variables are required for OpenMeter to work:**  
+> - `MAX_TOKENS_PER_MIN` enables the quota middleware that records usage events  
+> - `USAGE_METERING=openmeter` activates the OpenMeter backend  
+> - `OPENMETER_API_KEY` provides authentication to OpenMeter's API  
+
+The gateway gracefully falls back to `NullUsageBackend` if any required variable is missing.
 
 ### Scraping metrics
 
@@ -281,7 +286,7 @@ curl -H "Authorization: Bearer $JWT" http://localhost:8080/metrics
 ## Token quotas
 
 Attach Gateway can enforce per-user token limits. Install the optional
-dependency with `pip install attach-gateway[quota]` and set
+dependency with `pip install attach-dev[quota]` and set
 `MAX_TOKENS_PER_MIN` in your environment to enable the middleware. The
 counter defaults to the `cl100k_base` encoding; override with
 `QUOTA_ENCODING` if your model uses a different tokenizer. The default
@@ -297,7 +302,7 @@ production.
 ```bash
 # Optional: Enable token quotas
 export MAX_TOKENS_PER_MIN=60000
-pip install tiktoken  # or pip install attach-gateway[quota]
+pip install tiktoken  # or pip install attach-dev[quota]
 ```
 
 To customize the tokenizer:

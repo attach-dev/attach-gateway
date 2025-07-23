@@ -114,45 +114,62 @@ class OpenMeterBackend:
         try:
             from uuid import uuid4
         except ImportError as exc:
-            print(f"❌ UUID import failed: {exc}")
             return
 
-        # Create event in the same format as your working curl
-        event = {
-            "specversion": "1.0",
-            "type": "tokens",
-            "id": str(uuid4()),
-            "time": datetime.now(timezone.utc)
-            .isoformat(timespec="milliseconds")
-            .replace("+00:00", "Z"),
-            "source": "attach-gateway",
-            "subject": evt.get("user"),
-            "data": {
-                "tokens_in": int(evt.get("tokens_in", 0) or 0),
-                "tokens_out": int(evt.get("tokens_out", 0) or 0),
-                "model": evt.get("model"),
-            }
-        }
+        base_time = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        user = evt.get("user")
+        model = evt.get("model")
+        
+        tokens_in = int(evt.get("tokens_in", 0) or 0)
+        tokens_out = int(evt.get("tokens_out", 0) or 0)
 
-        try:
-            # Use the same format as your working curl command
-            response = await self.client.post(
-                f"{self.base_url}/api/v1/events",
-                json=event,
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/cloudevents+json"
+        # Send separate events for input and output tokens
+        events_to_send = []
+        
+        if tokens_in > 0:
+            events_to_send.append({
+                "specversion": "1.0",
+                "type": "prompt",        # ← Changed from "tokens" to "prompt"
+                "id": str(uuid4()),
+                "time": base_time,
+                "source": "attach-gateway",
+                "subject": user,
+                "data": {
+                    "tokens": tokens_in,
+                    "model": model,
+                    "type": "input"      # ← This stays the same
                 }
-            )
-            
-            if response.status_code in [200, 201, 202, 204]:  # ← Add 204
-                try:
-                    result = response.json()
-                    logger.info("OpenMeter event sent successfully")
-                except:
-                    logger.info(f"✅ OpenMeter success (no content): HTTP {response.status_code}")
-            else:
-                logger.warning(f"OpenMeter error: {response.status_code}")
+            })
+        
+        if tokens_out > 0:
+            events_to_send.append({
+                "specversion": "1.0", 
+                "type": "prompt",
+                "id": str(uuid4()),
+                "time": base_time,
+                "source": "attach-gateway",
+                "subject": user,
+                "data": {
+                    "tokens": tokens_out,   # ← Single tokens field
+                    "model": model,
+                    "type": "output"        # ← Add type field
+                }
+            })
+
+        # Send each event
+        for event in events_to_send:
+            try:
+                response = await self.client.post(
+                    f"{self.base_url}/api/v1/events",
+                    json=event,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/cloudevents+json"
+                    }
+                )
                 
-        except Exception as exc:
-            logger.warning("OpenMeter request failed: %s", exc)
+                if response.status_code not in [200, 201, 202, 204]:
+                    logger.warning(f"OpenMeter error: {response.status_code}")
+                    
+            except Exception as exc:
+                logger.warning("OpenMeter request failed: %s", exc)
