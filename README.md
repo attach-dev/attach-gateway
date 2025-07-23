@@ -312,8 +312,8 @@ export QUOTA_ENCODING=cl100k_base  # default
 
 ## Roadmap
 
-* **v0.2** — Protected‑resource metadata endpoint (OAuth 2.1), enhanced DID resolvers.  
-* **v0.3** — Token‑exchange (RFC 8693) for on‑behalf‑of delegation.  
+* **v0.3.1** — Protected‑resource metadata endpoint (OAuth 2.1), enhanced DID resolvers.  
+* **v0.3.1** — Token‑exchange (RFC 8693) for on‑behalf‑of delegation.  
 * **v0.4** — Attach Store v1 (Git‑style, policy guards).
 
 ---
