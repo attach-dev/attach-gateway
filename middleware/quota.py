@@ -23,10 +23,16 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, StreamingResponse
 
+# ─────────────────────────────────────────────────────────
+# Tokenizer setup
+# ─────────────────────────────────────────────────────────
 try:
     import tiktoken  # type: ignore
 except Exception:  # pragma: no cover
     tiktoken = None
+
+# ≈ cl100k_base: ~4 bytes / token for typical English
+_APPROX_BYTES_PER_TOKEN = 4
 
 from usage.backends import NullUsageBackend
 from utils.env import int_env
@@ -155,18 +161,20 @@ def _is_textual(mime: str) -> bool:
     return mime.startswith("text/") or "json" in mime
 
 
+# ---------------------------------------------------------------------------
+# Token-count helpers
+# ---------------------------------------------------------------------------
+
 def _encoder_for_model(model: str):
     """Return a tiktoken encoder, falling back to byte count."""
-    if tiktoken is None:  # pragma: no cover - fallback
-        logger.warning(
-            "tiktoken missing – using byte-count fallback; token metrics may be inflated"
-        )
+    if tiktoken is None:  # fallback: 1 token ≈ 4 bytes
 
-        class _Simple:
+        class _Approx:
             def encode(self, text: str) -> list[int]:
-                return list(text.encode())
+                # Never return 0 → always count at least 1 token
+                return [0] * max(1, len(text) // _APPROX_BYTES_PER_TOKEN)
 
-        return _Simple()
+        return _Approx()
 
     try:
         return tiktoken.encoding_for_model(model)
@@ -175,11 +183,11 @@ def _encoder_for_model(model: str):
             return tiktoken.get_encoding("cl100k_base")
         except Exception:
 
-            class _Simple:
+            class _Approx:
                 def encode(self, text: str) -> list[int]:
-                    return list(text.encode())
+                    return [0] * max(1, len(text) // _APPROX_BYTES_PER_TOKEN)
 
-            return _Simple()
+            return _Approx()
 
 
 def _num_tokens(text: str, model: str = "cl100k_base") -> int:
@@ -340,6 +348,21 @@ class TokenQuotaMiddleware(BaseHTTPMiddleware):
         if not hasattr(request.app.state, "usage"):
             request.app.state.usage = NullUsageBackend()
 
+        # ── OPTIONAL request-size guard (default 1 MB) ───────────────
+        max_bytes = int(os.getenv("MAX_REQUEST_BYTES", "1000000"))
+        raw = await request.body()
+        if len(raw) > max_bytes:
+            return JSONResponse(
+                {
+                    "detail": "request too large",
+                    "limit_bytes": max_bytes,
+                },
+                status_code=413,
+            )
+
+        # Re-use the already-read body from here on
+        request._body = raw
+
         user = request.headers.get("x-attach-user") or (
             request.client.host if request.client else "unknown"
         )
@@ -355,7 +378,7 @@ class TokenQuotaMiddleware(BaseHTTPMiddleware):
 
         tokens_in = 0
         if req_is_text:
-            raw = await request.body()
+            # raw already read above
             try:
                 payload = json.loads(raw.decode())
             except Exception:
