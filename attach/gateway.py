@@ -170,13 +170,13 @@ def create_app(config: Optional[AttachConfig] = None) -> FastAPI:
         allow_credentials=True,
     )
     
-    app.add_middleware(BaseHTTPMiddleware, dispatch=jwt_auth_mw)
-    app.add_middleware(BaseHTTPMiddleware, dispatch=session_mw)
-    
     # Only add quota middleware if available and explicitly configured
     limit = int_env("MAX_TOKENS_PER_MIN", 60000)
     if QUOTA_AVAILABLE and limit is not None:
         app.add_middleware(TokenQuotaMiddleware)
+
+    app.add_middleware(BaseHTTPMiddleware, dispatch=jwt_auth_mw)
+    app.add_middleware(BaseHTTPMiddleware, dispatch=session_mw)
 
     # Add routes
     app.include_router(a2a_router, prefix="/a2a")
