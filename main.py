@@ -8,7 +8,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from contextlib import asynccontextmanager
 
 from a2a.routes import router as a2a_router
-from logs import router as logs_router
+import logs
+logs_router = logs.router
 from middleware.auth import jwt_auth_mw
 from middleware.session import session_mw
 from proxy.engine import router as proxy_router

@@ -56,7 +56,7 @@ attach-gateway = "attach.__main__:main"
 
 # Include your existing modules with cleaner targeting
 [tool.hatch.build.targets.wheel]
-packages = ["attach", "auth", "middleware", "mem", "proxy", "a2a", "attach_pydid"]
+packages = ["attach", "auth", "middleware", "mem", "proxy", "a2a", "attach_pydid", "usage", "utils"]
 
 
 # Dynamic version from attach/__init__.py

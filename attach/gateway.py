@@ -14,7 +14,8 @@ from pydantic import BaseModel
 
 from a2a.routes import router as a2a_router
 from auth.oidc import _require_env
-from logs import router as logs_router
+import logs
+logs_router = logs.router
 from mem import get_memory_backend
 from middleware.auth import jwt_auth_mw
 from middleware.session import session_mw

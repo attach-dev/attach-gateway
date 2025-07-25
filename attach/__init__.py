@@ -4,7 +4,7 @@ Attach Gateway - Identity & Memory side-car for LLM engines
 Add OIDC SSO, agent-to-agent handoff, and pluggable memory to any Python project.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.3.2"
 __author__ = "Hammad Tariq"
 __email__ = "hammad@attach.dev"
 
