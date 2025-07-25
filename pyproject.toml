@@ -31,14 +31,15 @@ dependencies = [
     "python-jose[cryptography]>=3.3.0",
     "click>=8.0.0",
     "python-dotenv>=1.0.0",
+    "weaviate-client>=3.26.7,<4.0.0",
 ]
 
 [project.optional-dependencies]
-memory = ["weaviate-client>=3.26.7,<4.0.0"]
-temporal = ["temporalio>=1.5.0"]
 quota = ["tiktoken>=0.5.0"]
-usage = [
-    "prometheus_client>=0.20.0",
+usage = ["prometheus_client>=0.20.0"]
+full = [
+    "tiktoken>=0.5.0", 
+    "prometheus_client>=0.20.0"
 ]
 dev = [
     "pytest>=8.0.0", 
@@ -56,7 +57,7 @@ attach-gateway = "attach.__main__:main"
 
 # Include your existing modules with cleaner targeting
 [tool.hatch.build.targets.wheel]
-packages = ["attach", "auth", "middleware", "mem", "proxy", "a2a", "attach_pydid", "usage", "utils"]
+packages = ["attach", "auth", "middleware", "mem", "proxy", "a2a", "attach_pydid", "usage", "utils", "logs"]
 
 
 # Dynamic version from attach/__init__.py
