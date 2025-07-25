@@ -3,24 +3,33 @@ Main gateway factory - clean imports from packaged modules
 """
 
 import os
+from contextlib import asynccontextmanager
 from typing import Optional
 
 import weaviate
 from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
 
 from a2a.routes import router as a2a_router
-
-# Clean relative imports
-from auth import verify_jwt
 from auth.oidc import _require_env
-
-# from logs import router as logs_router
+import logs
+logs_router = logs.router
 from mem import get_memory_backend
 from middleware.auth import jwt_auth_mw
-from middleware.quota import TokenQuotaMiddleware
 from middleware.session import session_mw
 from proxy.engine import router as proxy_router
+from usage.factory import _select_backend, get_usage_backend
+from usage.metrics import mount_metrics
+from utils.env import int_env
+
+# Guard TokenQuotaMiddleware import (matches main.py pattern)
+try:
+    from middleware.quota import TokenQuotaMiddleware
+    QUOTA_AVAILABLE = True
+except ImportError:  # optional extra not installed
+    QUOTA_AVAILABLE = False
 
 # Import version from parent package
 from . import __version__
@@ -49,7 +58,7 @@ async def get_memory_events(request: Request, limit: int = 10):
             return {"data": {"Get": {"MemoryEvent": []}}}
 
         result = (
-            client.query.get("MemoryEvent", ["timestamp", "role", "content"])
+            client.query.get("MemoryEvent", ["timestamp", "event", "user", "state"])
             .with_additional(["id"])
             .with_limit(limit)
             .with_sort([{"path": ["timestamp"], "order": "desc"}])
@@ -97,6 +106,21 @@ class AttachConfig(BaseModel):
     auth0_client: Optional[str] = None
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan - startup and shutdown."""
+    # Startup
+    backend_selector = _select_backend()
+    app.state.usage = get_usage_backend(backend_selector)
+    mount_metrics(app)
+    
+    yield
+    
+    # Shutdown
+    if hasattr(app.state.usage, 'aclose'):
+        await app.state.usage.aclose()
+
+
 def create_app(config: Optional[AttachConfig] = None) -> FastAPI:
     """
     Create a FastAPI app with Attach Gateway functionality
@@ -127,17 +151,38 @@ def create_app(config: Optional[AttachConfig] = None) -> FastAPI:
         title="Attach Gateway",
         description="Identity & Memory side-car for LLM engines",
         version=__version__,
+        lifespan=lifespan,
     )
 
-    # Add middleware
-    app.middleware("http")(jwt_auth_mw)
-    app.middleware("http")(session_mw)
-    app.add_middleware(TokenQuotaMiddleware)
+    @app.get("/auth/config")
+    async def auth_config():
+        return {
+            "domain": config.auth0_domain,
+            "client_id": config.auth0_client,
+            "audience": config.oidc_audience,
+        }
+
+    # Add middleware in correct order (CORS outer-most)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:9000", "http://127.0.0.1:9000"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+        allow_credentials=True,
+    )
+    
+    # Only add quota middleware if available and explicitly configured
+    limit = int_env("MAX_TOKENS_PER_MIN", 60000)
+    if QUOTA_AVAILABLE and limit is not None:
+        app.add_middleware(TokenQuotaMiddleware)
+
+    app.add_middleware(BaseHTTPMiddleware, dispatch=jwt_auth_mw)
+    app.add_middleware(BaseHTTPMiddleware, dispatch=session_mw)
 
     # Add routes
-    app.include_router(a2a_router)
+    app.include_router(a2a_router, prefix="/a2a")
     app.include_router(proxy_router)
-    # app.include_router(logs_router)
+    app.include_router(logs_router)
     app.include_router(mem_router)
 
     # Setup memory backend

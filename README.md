@@ -234,35 +234,81 @@ curl -X POST /v1/logs \
 # => HTTP/1.1 202 Accepted
 ```
 
+## Usage hooks
+
+Emit token usage metrics for every request. Choose a backend via
+`USAGE_METERING` (alias `USAGE_BACKEND`):
+
+```bash
+export USAGE_METERING=prometheus  # or null
+```
+
+A Prometheus counter `attach_usage_tokens_total{user,direction,model}` is
+exposed for Grafana dashboards.
+Set `USAGE_METERING=null` (the default) to disable metering entirely.
+
+> **⚠️ Usage hooks depend on the quota middleware.**  
+> Make sure `MAX_TOKENS_PER_MIN` is set (any positive number) so the  
+> `TokenQuotaMiddleware` is enabled; the middleware is what records usage  
+> events that feed Prometheus.
+
+```bash
+# Enable usage tracking (set any reasonable limit)
+export MAX_TOKENS_PER_MIN=60000
+export USAGE_METERING=prometheus
+```
+
+#### OpenMeter (Stripe / ClickHouse)
+
+```bash
+# No additional dependencies needed - uses direct HTTP API
+export MAX_TOKENS_PER_MIN=60000              # Required: enables quota middleware
+export USAGE_METERING=openmeter              # Required: activates OpenMeter backend  
+export OPENMETER_API_KEY=your-api-key-here   # Required: API authentication
+export OPENMETER_URL=https://openmeter.cloud # Optional: defaults to https://openmeter.cloud
+```
+
+Events are sent directly to OpenMeter's HTTP API and are processed by the LLM tokens meter for billing integration with Stripe.
+
+> **⚠️ All three variables are required for OpenMeter to work:**  
+> - `MAX_TOKENS_PER_MIN` enables the quota middleware that records usage events  
+> - `USAGE_METERING=openmeter` activates the OpenMeter backend  
+> - `OPENMETER_API_KEY` provides authentication to OpenMeter's API  
+
+The gateway gracefully falls back to `NullUsageBackend` if any required variable is missing.
+
+### Scraping metrics
+
+```bash
+curl -H "Authorization: Bearer $JWT" http://localhost:8080/metrics
+```
+
 ## Token quotas
 
 Attach Gateway can enforce per-user token limits. Install the optional
-dependency with `pip install attach-gateway[quota]` and set
+dependency with `pip install attach-dev[quota]` and set
 `MAX_TOKENS_PER_MIN` in your environment to enable the middleware. The
 counter defaults to the `cl100k_base` encoding; override with
 `QUOTA_ENCODING` if your model uses a different tokenizer. The default
 in-memory store works in a single process and is not shared between
 workers—requests retried across processes may be double-counted. Use Redis
 for production deployments.
+If `tiktoken` is missing, a byte-count fallback is used which counts about
+four times more tokens than the `cl100k` tokenizer – install `tiktoken` in
+production.
 
 ### Enable token quotas
 
 ```bash
 # Optional: Enable token quotas
 export MAX_TOKENS_PER_MIN=60000
-pip install tiktoken  # or pip install attach-gateway[quota]
+pip install tiktoken  # or pip install attach-dev[quota]
 ```
 
 To customize the tokenizer:
 ```bash
 export QUOTA_ENCODING=cl100k_base  # default
 ```
-
-## Roadmap
-
-* **v0.2** — Protected‑resource metadata endpoint (OAuth 2.1), enhanced DID resolvers.  
-* **v0.3** — Token‑exchange (RFC 8693) for on‑behalf‑of delegation.  
-* **v0.4** — Attach Store v1 (Git‑style, policy guards).
 
 ---
 
