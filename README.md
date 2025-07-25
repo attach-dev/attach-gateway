@@ -208,7 +208,7 @@ Type a request like *"Write Python to sort a list."*  The browser shows:
 
 ---
 
-### Auth core
+## Auth core
 
 `auth.verify_jwt()` accepts three token formats and routes them automatically:
 
@@ -220,6 +220,27 @@ Example DID-JWT request:
 ```bash
 curl -X POST /v1/resource \
      -H "Authorization: Bearer did:key:z6Mki...<sig>.<payload>.<sig>"
+```
+
+Example OIDC JWT request:
+```bash
+curl -X POST /v1/resource \ 
+     -H "Authorization: Bearer $JWT"
+```
+
+### Other IdPs (Descope)
+To use your OIDC provider, set the following environment variables:
+```bash
+OIDC_ISSUER=<your-oidc-issuer>
+OIDC_AUD=<your-oidc-audience>
+AUTH_BACKEND=<your-authentication-provider>
+```
+Descope-specific environment variables:
+```bash
+DESCOPE_BASE_URL=https://api.descope.com or <your-descope-base-url>
+DESCOPE_PROJECT_ID=<your-descope-project-id>
+DESCOPE_CLIENT_ID=<your-descope-inbound-app-client-id>
+DESCOPE_CLIENT_SECRET=<your-descope-inbound-app-client-secret>
 ```
 
 ## 💾 Memory: logs
