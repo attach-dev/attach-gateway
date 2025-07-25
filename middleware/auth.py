@@ -29,8 +29,12 @@ async def jwt_auth_mw(request: Request, call_next):
     • Verifies it with `auth.oidc.verify_jwt`.
     • Stores the `sub` claim in `request.state.sub` for downstream middleware.
     • Rejects the request with 401 on any failure.
-    • Skips authentication for excluded paths.
+    • Skips authentication for excluded paths and OPTIONS requests.
     """
+    # Skip authentication for OPTIONS requests (CORS preflight)
+    if request.method == "OPTIONS":
+        return await call_next(request)
+    
     # Skip authentication for excluded paths
     if request.url.path in EXCLUDED_PATHS:
         return await call_next(request)
@@ -48,6 +52,4 @@ async def jwt_auth_mw(request: Request, call_next):
 
     # attach the user id (sub) for the session-middleware
     request.state.sub = claims["sub"]
-
-    # continue down the middleware stack / route handler
     return await call_next(request)
