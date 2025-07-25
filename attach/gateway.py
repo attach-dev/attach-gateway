@@ -174,7 +174,7 @@ def create_app(config: Optional[AttachConfig] = None) -> FastAPI:
     app.add_middleware(BaseHTTPMiddleware, dispatch=session_mw)
     
     # Only add quota middleware if available and explicitly configured
-    limit = int_env("MAX_TOKENS_PER_MIN", None)
+    limit = int_env("MAX_TOKENS_PER_MIN", 60000)
     if QUOTA_AVAILABLE and limit is not None:
         app.add_middleware(TokenQuotaMiddleware)
 
