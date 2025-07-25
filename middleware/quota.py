@@ -363,9 +363,11 @@ class TokenQuotaMiddleware(BaseHTTPMiddleware):
         # Re-use the already-read body from here on
         request._body = raw
 
-        user = request.headers.get("x-attach-user") or (
+        # Fix: Get user from request.state.sub (set by auth middleware)
+        user = getattr(request.state, "sub", None) or (
             request.client.host if request.client else "unknown"
         )
+
         usage = {
             "user": user,
             "project": request.headers.get("x-attach-project", "default"),
