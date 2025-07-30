@@ -9,13 +9,17 @@ from typing import Optional
 import weaviate
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
+from starlette.middleware.base import BaseHTTPMiddleware
 
+import logs
 from a2a.routes import router as a2a_router
 from auth.oidc import _require_env
-import logs
+
 logs_router = logs.router
+from api.metrics import router as metrics_router
+from attach.cache import build_cache
+from attach.queue import build_queue
 from mem import get_memory_backend
 from middleware.auth import jwt_auth_mw
 from middleware.session import session_mw
@@ -27,6 +31,7 @@ from utils.env import int_env
 # Guard TokenQuotaMiddleware import (matches main.py pattern)
 try:
     from middleware.quota import TokenQuotaMiddleware
+
     QUOTA_AVAILABLE = True
 except ImportError:  # optional extra not installed
     QUOTA_AVAILABLE = False
@@ -101,6 +106,9 @@ class AttachConfig(BaseModel):
     oidc_audience: str
     engine_url: str = "http://localhost:11434"
     mem_backend: str = "none"
+    queue_backend: str = "memory"
+    cache_backend: str = "memory"
+    redis_url: Optional[str] = None
     weaviate_url: Optional[str] = None
     auth0_domain: Optional[str] = None
     auth0_client: Optional[str] = None
@@ -113,11 +121,11 @@ async def lifespan(app: FastAPI):
     backend_selector = _select_backend()
     app.state.usage = get_usage_backend(backend_selector)
     mount_metrics(app)
-    
+
     yield
-    
+
     # Shutdown
-    if hasattr(app.state.usage, 'aclose'):
+    if hasattr(app.state.usage, "aclose"):
         await app.state.usage.aclose()
 
 
@@ -142,6 +150,9 @@ def create_app(config: Optional[AttachConfig] = None) -> FastAPI:
             oidc_audience=audience,
             engine_url=os.getenv("ENGINE_URL", "http://localhost:11434"),
             mem_backend=os.getenv("MEM_BACKEND", "none"),
+            queue_backend=os.getenv("QUEUE_BACKEND", "memory"),
+            cache_backend=os.getenv("CACHE_BACKEND", "memory"),
+            redis_url=os.getenv("REDIS_URL"),
             weaviate_url=os.getenv("WEAVIATE_URL"),
             auth0_domain=os.getenv("AUTH0_DOMAIN"),
             auth0_client=os.getenv("AUTH0_CLIENT"),
@@ -170,7 +181,7 @@ def create_app(config: Optional[AttachConfig] = None) -> FastAPI:
         allow_headers=["*"],
         allow_credentials=True,
     )
-    
+
     # Only add quota middleware if available and explicitly configured
     limit = int_env("MAX_TOKENS_PER_MIN", 60000)
     if QUOTA_AVAILABLE and limit is not None:
@@ -184,10 +195,13 @@ def create_app(config: Optional[AttachConfig] = None) -> FastAPI:
     app.include_router(proxy_router)
     app.include_router(logs_router)
     app.include_router(mem_router)
+    app.include_router(metrics_router)
 
     # Setup memory backend
     memory_backend = get_memory_backend(config.mem_backend, config)
     app.state.memory = memory_backend
+    app.state.cache = build_cache(config.cache_backend, config.redis_url)
+    app.state.queue = build_queue(config.queue_backend, config.redis_url)
     app.state.config = config
 
     return app

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import json
 import os
 from typing import Any, AsyncIterator
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request, status
-from starlette.responses import StreamingResponse
+from starlette.responses import JSONResponse, StreamingResponse
+
+from attach.cache import cache_key
+from attach.queue import new_job
 
 router = APIRouter()
 
@@ -52,19 +56,46 @@ async def proxy_to_engine(request: Request):
     base = os.getenv("ENGINE_URL", "http://localhost:11434").rstrip("/")
     upstream_url = f"{base}/v1/chat/completions"
 
+    cache = request.app.state.cache
+    queue = request.app.state.queue
+    cfg = request.app.state.config
+    ckey = cache_key(
+        body.get("model", ""),
+        json.dumps(body.get("messages", [])),
+        body.get("params", {}),
+    )
+    if (hit := cache.get(ckey)) is not None:
+        return JSONResponse(hit)
+    if cfg.queue_backend != "memory":
+        job = new_job({"request": body, "headers": dict(request.headers)})
+        await queue.put(job)
+        return JSONResponse({"job_id": job["id"], "status": "queued"}, status_code=202)
+
     # Pass along Bearer token if present
     headers: dict[str, str] = {}
     if auth := request.headers.get("Authorization"):
         headers["Authorization"] = auth
 
     try:
+        if not body.get("stream", True):
+            async with httpx.AsyncClient(timeout=None) as client:
+                resp = await client.post(
+                    upstream_url, json=body, headers=headers, timeout=None
+                )
+            result = resp.json()
+            cache.set(ckey, result)
+            return JSONResponse(result)
         return StreamingResponse(
-            _upstream_stream(request.method, upstream_url, headers=headers, payload=body),
+            _upstream_stream(
+                request.method, upstream_url, headers=headers, payload=body
+            ),
             media_type="application/json",
         )
     except httpx.HTTPStatusError as exc:
         # Bubble the upstream status so callers can act accordingly
-        raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text)
+        raise HTTPException(
+            status_code=exc.response.status_code, detail=exc.response.text
+        )
     except Exception as exc:
         # Log & hide internals from the client
         # (LOGGER omitted for brevity – add one if you like)
