@@ -1,0 +1,21 @@
+version: '3'
+services:
+  gateway:
+    build: .
+    environment:
+      - QUEUE_BACKEND=redis
+      - CACHE_BACKEND=redis
+      - REDIS_URL=redis://redis:6379/0
+    ports:
+      - "8080:8080"
+  worker:
+    build: .
+    command: python scripts/worker.py
+    environment:
+      - QUEUE_BACKEND=redis
+      - CACHE_BACKEND=redis
+      - REDIS_URL=redis://redis:6379/0
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
