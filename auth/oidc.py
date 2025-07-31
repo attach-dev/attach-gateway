@@ -45,10 +45,7 @@ def _get_oidc_audience() -> str:
 
 def _get_auth_backend() -> str:
     """Get authentication backend from environment."""
-    backend = os.getenv("AUTH_BACKEND", "")
-    if not backend:
-        raise RuntimeError("AUTH_BACKEND must be set (see README for setup)")
-    return backend
+    return os.getenv("AUTH_BACKEND", "auth0")
 
 
 def _get_jwks_url(issuer: str) -> str:
@@ -98,11 +95,6 @@ def _jwks(issuer: str) -> list[dict[str, Any]]:
 async def _exchange_jwt_descope(
     external_jwt: str,
     external_issuer: str,
-    # all optional for now - defaults are from original jwt
-    # options: request / original / merged
-    aud_src: Optional[str] = "original", 
-    scope_src: Optional[str] = "original",
-    custom_claims_src: Optional[str] = "original", 
 ) -> str:
     """
     Exchange an external JWT for a Descope token using inbound app token endpoint.
@@ -128,10 +120,6 @@ async def _exchange_jwt_descope(
             data=grant_data,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
-
-        print(f"Response Status: {response.status_code}")
-        print(f"Response Body: {response.text}")
-            
         response.raise_for_status()
         return response.json()["access_token"]
 
@@ -190,36 +178,56 @@ def _verify_jwt_direct(token: str, *, leeway: int = 60) -> dict[str, Any]:
     )
 
 
-async def _verify_jwt_with_exchange(token: str, *, leeway: int = 60) -> dict[str, Any]:
+async def verify_jwt_with_exchange(token: str, *, leeway: int = 60) -> dict[str, Any]:
     """
     Exchange an external JWT for a Descope token and verify it.
+
+    First, tries to directly verify the JWT. Then, immediately throws on validation errors without attempting the exchange.
+
+    Attempts the exchange. 
+
+    Returns:
+        Decoded claim set (`dict[str, Any]`) on success.
+
+    Raises:
+        ValueError | jose.JWTError on any validation error.
+        ValueError if exchange fails.
+        ValueError if exchange is not applicable (e.g., missing issuer).
     """ 
-    unverified_claims = jwt.get_unverified_claims(token)
-    external_issuer = unverified_claims.get("iss")
+    try:
+        return _verify_jwt_direct(token, leeway=leeway)
+    except ValueError as direct_error:
+        # Don't attempt exchange for validation errors like invalid algorithm or missing kid
+        if any(phrase in str(direct_error) for phrase in [
+            "not allowed", 
+            "missing 'kid'", 
+            "invalid token",
+            "malformed"
+        ]):
+            raise direct_error
+            
+        try:
+            unverified_claims = jwt.get_unverified_claims(token)
+            external_issuer = unverified_claims.get("iss")
+            
+            if not external_issuer:
+                raise ValueError("Cannot extract issuer from token for exchange")
+            
+            descope_token = await _exchange_jwt_descope(token, external_issuer)
+            return _verify_jwt_direct(descope_token, leeway=leeway)
+        except Exception as exchange_error:
+            raise ValueError(f"JWT verification and exchange both failed: {direct_error}")
+    except Exception as other_error:
+        raise other_error
 
-    descope_token = await _exchange_jwt_descope(token, external_issuer)
-
-    return _verify_jwt_direct(descope_token, leeway=leeway)
 
 
 # --------------------------------------------------------------------------- #
 # Public API                                                                  #
 # --------------------------------------------------------------------------- #
-async def verify_jwt(token: str, *, leeway: int = 60) -> dict[str, Any]:
+def verify_jwt(token: str, *, leeway: int = 60) -> dict[str, Any]:
     """
-    Verify OIDC JWT - expects Descope tokens, exchanges external tokens on mixed stacks.
+    Backward-compatible JWT verification 
+    async structure with exchange can be called with verify_jwt_with_exchange
     """
-    backend = _get_auth_backend()
-
-    if backend == "descope": 
-        # will want to verify directly
-        return _verify_jwt_direct(token, leeway=leeway)
-    else:
-        try:
-            return _verify_jwt_direct(token, leeway=leeway)
-        except Exception as direct_error:
-            print(f"Direct verification failed: {direct_error}")
-            try:
-                return await _verify_jwt_with_exchange(token, leeway=leeway)
-            except Exception as exchange_error:
-                raise ValueError(f"JWT verification failed. Direct: {direct_error}, Exchange: {exchange_error}")
+    return _verify_jwt_direct(token, leeway=leeway)

@@ -4,13 +4,14 @@ Stateless JWT authentication middleware.
 This file *must* live inside the project's `middleware/` package so that
 `from middleware.auth import jwt_auth_mw` works.
 """
-
 from __future__ import annotations
+
+import os
 
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from auth.oidc import verify_jwt  # your existing verifier (RS256 / ES256 only)
+from auth.oidc import verify_jwt, verify_jwt_with_exchange  # your existing verifier (RS256 / ES256 only)
 
 _CLOCK_SKEW = 60  # seconds
 
@@ -46,7 +47,11 @@ async def jwt_auth_mw(request: Request, call_next):
     token = auth_header.split(" ", 1)[1]
 
     try:
-        claims = verify_jwt(token, leeway=_CLOCK_SKEW)
+        # Use sync version unless Descope exchange is explicitly enabled
+        if os.getenv("ENABLE_DESCOPE_EXCHANGE", "false").lower() == "true":
+            claims = await verify_jwt_with_exchange(token, leeway=_CLOCK_SKEW) 
+        else:
+            claims = verify_jwt(token, leeway=_CLOCK_SKEW)  # original sync version
     except Exception as exc:
         return JSONResponse(status_code=401, content={"detail": str(exc)})
 
