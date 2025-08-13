@@ -4,6 +4,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 .venv/
+venv/
 __pyo3*.so
 .env
 .cursorrules
@@ -17,4 +18,8 @@ attach_gateway.tar.gz~/
 **/.DS_Store
 dist/
 build/
+*.egg-info/
+venv/
+.venv/
+__pyo3*.so
 *.egg-info/

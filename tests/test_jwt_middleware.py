@@ -6,7 +6,7 @@ from httpx import AsyncClient, ASGITransport
 from jose import JWTError
 
 import auth.oidc 
-from auth.oidc import verify_jwt
+from auth.oidc import verify_jwt, verify_jwt_with_exchange
 from middleware.auth import jwt_auth_mw
 
 # Example of a dummy JWT with three segments
@@ -20,16 +20,22 @@ def stub_verify_jwt(monkeypatch):
     - returns {"sub": "test-user"} for token "DUMMY_GOOD_TOKEN"
     - raises ValueError for anything else
     """
-    def fake_verify(token: str, *, leeway: int = 60):
+    def fake_verify_sync(token: str, *, leeway: int = 60):
         if token == DUMMY_GOOD_TOKEN:
             return {"sub": "test-user"}
         raise JWTError("invalid token")
 
-    # patch the original
-    monkeypatch.setattr(auth.oidc, "verify_jwt", fake_verify)
-    # patch the copy inside the middleware module
+    async def fake_verify_async(token: str, *, leeway: int = 60):
+        if token == DUMMY_GOOD_TOKEN:
+            return {"sub": "test-user"}
+        raise JWTError("invalid token")
+
+    monkeypatch.setattr(auth.oidc, "verify_jwt", fake_verify_sync)
+    monkeypatch.setattr(auth.oidc, "verify_jwt_with_exchange", fake_verify_async)
+    
     import middleware.auth
-    monkeypatch.setattr(middleware.auth, "verify_jwt", fake_verify)
+    monkeypatch.setattr(middleware.auth, "verify_jwt", fake_verify_sync)
+    monkeypatch.setattr(middleware.auth, "verify_jwt_with_exchange", fake_verify_async)
 
 
 @pytest.fixture
