@@ -68,7 +68,7 @@ def _get_jwks_url(issuer: str) -> str:
             return f"{base_url}/.well-known/jwks.json"
 
 
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=4)
 def _fetch_jwks(issuer: str) -> dict[str, Any]:
     """
     Download the issuer's JWKS once and keep it in memory.
@@ -100,9 +100,9 @@ async def _exchange_jwt_descope(
     Exchange an external JWT for a Descope token using inbound app token endpoint.
     """
     descope_base_url = os.getenv("DESCOPE_BASE_URL", "https://api.descope.com")
-    descope_project_id = os.getenv("DESCOPE_PROJECT_ID")
-    descope_client_id = os.getenv("DESCOPE_CLIENT_ID")
-    descope_client_secret = os.getenv("DESCOPE_CLIENT_SECRET") 
+    descope_project_id = _require_env("DESCOPE_PROJECT_ID")
+    descope_client_id = _require_env("DESCOPE_CLIENT_ID")
+    descope_client_secret = _require_env("DESCOPE_CLIENT_SECRET")
 
     token_endpoint = f"{descope_base_url}/oauth2/v1/apps/token" 
 
@@ -177,6 +177,29 @@ def _verify_jwt_direct(token: str, *, leeway: int = 60) -> dict[str, Any]:
         },
     )
 
+def _verify_jwt_against(token: str, issuer: str, *, audience: str, leeway: int = 60) -> dict[str, Any]:
+    header = jwt.get_unverified_header(token)
+    alg = header.get("alg")
+    if alg not in ACCEPTED_ALGS:
+        raise ValueError(f"alg {alg!r} not allowed")
+    kid = header.get("kid")
+    if not kid:
+        raise ValueError("JWT header missing 'kid'")
+
+    keys = _jwks(issuer)
+    key_cfg = next((k for k in keys if k["kid"] == kid), None)
+    if not key_cfg:
+        _fetch_jwks.cache_clear()
+        keys = _jwks(issuer)
+        key_cfg = next((k for k in keys if k["kid"] == kid), None)
+        if not key_cfg:
+            raise ValueError("signing key not found in issuer JWKS")
+
+    return jwt.decode(
+        token, key_cfg, algorithms=[alg],
+        audience=audience, issuer=issuer,
+        options={"leeway": leeway, "verify_aud": True, "verify_exp": True, "verify_iat": True},
+    )
 
 async def verify_jwt_with_exchange(token: str, *, leeway: int = 60) -> dict[str, Any]:
     """
@@ -202,7 +225,8 @@ async def verify_jwt_with_exchange(token: str, *, leeway: int = 60) -> dict[str,
             "not allowed", 
             "missing 'kid'", 
             "invalid token",
-            "malformed"
+            "malformed",
+            "expired"
         ]):
             raise direct_error
             
@@ -214,9 +238,11 @@ async def verify_jwt_with_exchange(token: str, *, leeway: int = 60) -> dict[str,
                 raise ValueError("Cannot extract issuer from token for exchange")
             
             descope_token = await _exchange_jwt_descope(token, external_issuer)
-            return _verify_jwt_direct(descope_token, leeway=leeway)
+            descope_issuer = f"https://api.descope.com/v1/apps/{_require_env('DESCOPE_PROJECT_ID')}"
+            audience = os.getenv("DESCOPE_AUD", _get_oidc_audience())
+            return _verify_jwt_against(descope_token, issuer=descope_issuer, audience=audience, leeway=leeway)
         except Exception as exchange_error:
-            raise ValueError(f"JWT verification and exchange both failed: {direct_error}")
+            raise ValueError(f"JWT verification failed; direct={direct_error!s}; exchange={exchange_error!s}")
     except Exception as other_error:
         raise other_error
 

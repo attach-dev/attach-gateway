@@ -20,3 +20,6 @@ dist/
 build/
 *.egg-info/
 venv/
+.venv/
+__pyo3*.so
+*.egg-info/
