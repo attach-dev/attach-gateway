@@ -100,6 +100,113 @@ You should see a JSON response plus `X‑ATTACH‑Session‑Id` header – proof
 
 ---
 
+## Claude Code + MCP Gateway (Local-First, 2-Minute Setup)
+
+Attach Gateway can act as a **local MCP (Model Context Protocol) reverse proxy** for Claude Code, providing:
+- JWT-authenticated access control for all MCP tool calls
+- Per-user daily quota enforcement (configurable glob patterns)
+- Local audit logs (SQLite) for compliance & debugging
+- Web-based console UI for monitoring
+
+This feature is **opt-in** and does not affect the core OIDC sidecar functionality.
+
+### Quick Setup
+
+```bash
+# 1. Install Attach Gateway
+pip install attach-dev
+
+# 2. Configure your MCP servers (HTTP upstream only in MVP)
+mkdir -p ~/.attach
+cat > ~/.attach/mcp.json <<EOF
+{
+  "version": 1,
+  "servers": {
+    "notion": {
+      "enabled": true,
+      "url": "http://localhost:7001/mcp",
+      "headers": {
+        "Authorization": "env:NOTION_TOKEN"
+      }
+    }
+  }
+}
+EOF
+
+# 3. Optional: Configure quotas
+cat > ~/.attach/mcp_policy.json <<EOF
+{
+  "version": 1,
+  "enabled": true,
+  "per_user_daily_tool_calls": {
+    "notion.*": 100,
+    "github.*": 200,
+    "*": 1000
+  }
+}
+EOF
+
+# 4. Start the gateway with MCP enabled
+export OIDC_ISSUER=https://YOUR_DOMAIN.auth0.com
+export OIDC_AUD=your-api-identifier
+export ATTACH_ENABLE_MCP=true
+
+attach-gateway --port 8080
+```
+
+### Integrate with Claude Code
+
+```bash
+# Generate Claude Code configuration commands
+attach-gateway claude install --project .
+
+# Or manually add servers:
+claude mcp add --transport http --name "notion" --url "http://localhost:8080/mcp/notion"
+```
+
+### Use the Console UI
+
+1. Get a JWT token from your OIDC provider
+2. Open http://localhost:8080/console
+3. Paste your Bearer token when prompted
+4. View MCP call statistics, audit logs, and server status
+
+### MCP CLI Commands
+
+```bash
+# List configured servers
+attach-gateway mcp list
+
+# Add a new server
+attach-gateway mcp add github http://localhost:7002/mcp \
+  --header "Authorization: env:GITHUB_TOKEN"
+
+# Enable/disable servers
+attach-gateway mcp enable github
+attach-gateway mcp disable github
+
+# Remove a server
+attach-gateway mcp remove github
+```
+
+### How It Works
+
+1. Claude Code sends JSON-RPC requests to `http://localhost:8080/mcp/{server}`
+2. Gateway validates your JWT Bearer token
+3. Gateway checks quota limits (if enabled)
+4. Gateway forwards request to configured upstream MCP server
+5. Gateway logs metadata (timestamp, user, tool, latency) to local SQLite
+6. Response is returned to Claude Code
+
+**Security Notes:**
+- `/mcp/*` endpoints require Bearer JWT authentication
+- Console UI data endpoints (`/console/api/*`) require JWT
+- Console landing page and static assets are unauthenticated (no sensitive data)
+- Audit logs contain metadata only (no request/response bodies)
+- All data stays local by default (no phone-home)
+
+---
+
 ## Use in your project
 
 1. Copy `.env.example` → `.env` and fill in OIDC + backend URLs  

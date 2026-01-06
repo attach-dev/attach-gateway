@@ -1,16 +1,21 @@
 # examples/agents/coder.py   (drop this in as a full replacement)
+import os
+import time
+import uuid
+from typing import Any, Dict, List
+
+import httpx
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import httpx, os, time, uuid
-from typing import List, Dict, Any
 
 ENGINE_URL = os.getenv("ENGINE_URL", "http://127.0.0.1:11434")
-app        = FastAPI(title="Coder Agent")
+app = FastAPI(title="Coder Agent")
+
 
 class ChatRequest(BaseModel):
     model: str
     messages: List[Dict[str, Any]]
-    stream:  bool = False
+    stream: bool = False
 
 
 def _fmt_error(text: str) -> Dict[str, Any]:
@@ -22,7 +27,7 @@ def _fmt_error(text: str) -> Dict[str, Any]:
         "id": f"err-{uuid.uuid4().hex[:8]}",
         "object": "chat.completion",
         "created": int(time.time()),
-        "model":   "coder-error",
+        "model": "coder-error",
         "choices": [
             {
                 "index": 0,

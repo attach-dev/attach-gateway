@@ -59,12 +59,16 @@ async def proxy_to_engine(request: Request):
 
     try:
         return StreamingResponse(
-            _upstream_stream(request.method, upstream_url, headers=headers, payload=body),
+            _upstream_stream(
+                request.method, upstream_url, headers=headers, payload=body
+            ),
             media_type="application/json",
         )
     except httpx.HTTPStatusError as exc:
         # Bubble the upstream status so callers can act accordingly
-        raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text)
+        raise HTTPException(
+            status_code=exc.response.status_code, detail=exc.response.text
+        )
     except Exception as exc:
         # Log & hide internals from the client
         # (LOGGER omitted for brevity – add one if you like)

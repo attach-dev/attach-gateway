@@ -1,14 +1,15 @@
 import os
+from contextlib import asynccontextmanager
 
 import weaviate
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
-from contextlib import asynccontextmanager
 
-from a2a.routes import router as a2a_router
 import logs
+from a2a.routes import router as a2a_router
+
 logs_router = logs.router
 from middleware.auth import jwt_auth_mw
 from middleware.session import session_mw
@@ -19,6 +20,7 @@ from utils.env import int_env
 
 try:
     from middleware.quota import TokenQuotaMiddleware
+
     QUOTA_AVAILABLE = True
 except ImportError:
     QUOTA_AVAILABLE = False
@@ -104,11 +106,12 @@ async def lifespan(app: FastAPI):
     backend_selector = _select_backend()
     app.state.usage = get_usage_backend(backend_selector)
     mount_metrics(app)
-    
+
     yield
-    
-    if hasattr(app.state.usage, 'aclose'):
+
+    if hasattr(app.state.usage, "aclose"):
         await app.state.usage.aclose()
+
 
 app = FastAPI(title="attach-gateway", lifespan=lifespan)
 
@@ -129,6 +132,7 @@ if QUOTA_AVAILABLE and limit is not None:
 app.add_middleware(BaseHTTPMiddleware, dispatch=jwt_auth_mw)
 app.add_middleware(BaseHTTPMiddleware, dispatch=session_mw)
 
+
 @app.get("/auth/config")
 async def auth_config():
     return {
@@ -136,6 +140,7 @@ async def auth_config():
         "client_id": os.getenv("AUTH0_CLIENT"),
         "audience": os.getenv("OIDC_AUD"),
     }
+
 
 app.include_router(a2a_router, prefix="/a2a")
 app.include_router(logs_router)

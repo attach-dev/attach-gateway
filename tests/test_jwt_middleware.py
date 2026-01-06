@@ -1,17 +1,19 @@
 import pytest
-from fastapi import FastAPI, Request
-from starlette.middleware.base import BaseHTTPMiddleware
-from fastapi import HTTPException
-from httpx import AsyncClient, ASGITransport
+from fastapi import FastAPI, HTTPException, Request
+from httpx import ASGITransport, AsyncClient
 from jose import JWTError
+from starlette.middleware.base import BaseHTTPMiddleware
 
-import auth.oidc 
+import auth.oidc
 from auth.oidc import verify_jwt, verify_jwt_with_exchange
 from middleware.auth import jwt_auth_mw
 
 # Example of a dummy JWT with three segments
-DUMMY_GOOD_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXIifQ.s3cr3t"
+DUMMY_GOOD_TOKEN = (
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXIifQ.s3cr3t"
+)
 DUMMY_BAD_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid.payload"
+
 
 @pytest.fixture(autouse=True)
 def stub_verify_jwt(monkeypatch):
@@ -20,6 +22,7 @@ def stub_verify_jwt(monkeypatch):
     - returns {"sub": "test-user"} for token "DUMMY_GOOD_TOKEN"
     - raises ValueError for anything else
     """
+
     def fake_verify_sync(token: str, *, leeway: int = 60):
         if token == DUMMY_GOOD_TOKEN:
             return {"sub": "test-user"}
@@ -32,8 +35,9 @@ def stub_verify_jwt(monkeypatch):
 
     monkeypatch.setattr(auth.oidc, "verify_jwt", fake_verify_sync)
     monkeypatch.setattr(auth.oidc, "verify_jwt_with_exchange", fake_verify_async)
-    
+
     import middleware.auth
+
     monkeypatch.setattr(middleware.auth, "verify_jwt", fake_verify_sync)
     monkeypatch.setattr(middleware.auth, "verify_jwt_with_exchange", fake_verify_async)
 

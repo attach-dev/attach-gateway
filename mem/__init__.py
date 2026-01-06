@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-# mem/__init__.py
-
 import asyncio
 import os
-from typing import Protocol, Optional, Union
+from typing import Optional, Protocol, Union
+
+# mem/__init__.py
+
 
 
 class MemoryBackend(Protocol):
