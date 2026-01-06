@@ -34,7 +34,8 @@ async def session_mw(request: Request, call_next):
         return await call_next(request)
 
     # Skip session middleware for console
-    if request.url.path == "/console":
+    # Note: Check both with and without trailing slash to handle URL variations
+    if request.url.path in ("/console", "/console/"):
         return await call_next(request)
 
     # Skip session middleware for excluded path prefixes

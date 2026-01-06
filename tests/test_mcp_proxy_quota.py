@@ -57,6 +57,9 @@ def temp_attach_dir(monkeypatch, tmp_path):
     import mcp.config
     import mcp.quota
 
+    # Patch _attach_dir_path for is_mcp_enabled() and get_mcp_config_path()
+    monkeypatch.setattr(mcp.config, "_attach_dir_path", lambda: attach_dir)
+    # Also patch get_attach_dir for backward compatibility
     monkeypatch.setattr(mcp.config, "get_attach_dir", lambda: attach_dir)
     monkeypatch.setattr(mcp.quota, "get_attach_dir", lambda: attach_dir)
     monkeypatch.setattr(audit.sqlite, "get_attach_dir", lambda: attach_dir)

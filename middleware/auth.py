@@ -50,7 +50,8 @@ async def jwt_auth_mw(request: Request, call_next):
         return await call_next(request)
 
     # Skip authentication for console (unauthenticated landing page)
-    if request.url.path == "/console":
+    # Note: Check both with and without trailing slash to handle URL variations
+    if request.url.path in ("/console", "/console/"):
         return await call_next(request)
 
     # Skip authentication for excluded path prefixes (console static assets)

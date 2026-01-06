@@ -160,8 +160,12 @@ attach-gateway --port 8080
 # Generate Claude Code configuration commands
 attach-gateway claude install --project .
 
-# Or manually add servers:
-claude mcp add --transport http --name "notion" --url "http://localhost:8080/mcp/notion"
+# Or manually add servers (using positional args):
+claude mcp add --transport http notion http://localhost:8080/mcp/notion
+
+# If your Claude Code version supports authorization headers:
+# export JWT=<your-bearer-token>
+# claude mcp add --transport http notion http://localhost:8080/mcp/notion --header "Authorization: Bearer $JWT"
 ```
 
 ### Use the Console UI

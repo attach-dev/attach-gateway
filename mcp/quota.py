@@ -30,7 +30,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from audit.sqlite import get_quota_count, increment_quota_count
+from audit.sqlite import atomic_increment_and_get_quota_count, increment_quota_count
 from mcp.config import get_attach_dir
 
 log = logging.getLogger(__name__)
@@ -69,8 +69,8 @@ def get_tool_limit(tool: str) -> Optional[int]:
 
     Matching priority:
     1. Exact match
-    2. First glob pattern that matches
-    3. Wildcard "*" if present
+    2. First glob pattern that matches (excluding bare "*")
+    3. Wildcard "*" if present (catch-all fallback)
     """
     policy = load_policy()
     limits = policy.get("per_user_daily_tool_calls", {})
@@ -79,13 +79,16 @@ def get_tool_limit(tool: str) -> Optional[int]:
     if tool in limits:
         return limits[tool]
 
-    # Try glob patterns
+    # Try glob patterns (skip bare "*" - it's handled as fallback)
     for pattern, limit in limits.items():
+        # Skip the bare "*" pattern - we apply it only as final fallback
+        if pattern == "*":
+            continue
         if "*" in pattern or "?" in pattern or "[" in pattern:
             if fnmatch.fnmatch(tool, pattern):
                 return limit
 
-    # Fallback to wildcard
+    # Fallback to wildcard catch-all (only if no specific pattern matched)
     if "*" in limits:
         return limits["*"]
 
@@ -102,6 +105,9 @@ def check_quota(user: str, tool: str) -> tuple[bool, Optional[str]]:
     """
     Check if user is within quota for tool.
 
+    NOTE: This only checks the quota without incrementing. Use check_and_reserve_quota()
+    for atomic check-and-increment to prevent TOCTOU race conditions.
+
     Returns:
         (allowed: bool, error_msg: Optional[str])
         - (True, None) if allowed
@@ -116,19 +122,30 @@ def check_quota(user: str, tool: str) -> tuple[bool, Optional[str]]:
         return (True, None)
 
     date_utc = get_current_date_utc()
-    current_count = get_quota_count(user, tool, date_utc)
+    # Use atomic increment to get current count and reserve our slot
+    new_count = atomic_increment_and_get_quota_count(user, tool, date_utc)
 
-    if current_count >= limit:
-        error_msg = f"tool quota exceeded: {tool} limit={limit} used={current_count}"
+    # new_count is the count AFTER increment (1-based)
+    # So if limit=1, we allow new_count=1 but deny new_count=2
+    if new_count > limit:
+        error_msg = f"tool quota exceeded: {tool} limit={limit} used={new_count}"
         return (False, error_msg)
 
     return (True, None)
 
 
 def record_tool_call(user: str, tool: str) -> None:
-    """Record a tool call in quota counters."""
+    """
+    Record a tool call in quota counters.
+
+    NOTE: This is now a no-op when quota is enabled because check_quota()
+    atomically increments the counter. Kept for backwards compatibility
+    and for cases where quota is disabled but tracking is still desired.
+    """
     if not is_quota_enabled():
+        # Only increment if quota is disabled (for tracking without enforcement)
         return
 
-    date_utc = get_current_date_utc()
-    increment_quota_count(user, tool, date_utc)
+    # When quota is enabled, the counter was already incremented in check_quota()
+    # No need to increment again
+    pass

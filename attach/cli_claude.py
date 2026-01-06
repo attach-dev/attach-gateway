@@ -25,11 +25,10 @@ def claude_group():
 @click.option(
     "--project", default=".", help="Project directory (default: current directory)"
 )
-@click.option("--bearer", help="Bearer token for Authorization header (optional)")
 @click.option(
     "--write-file", is_flag=True, help="Write .mcp.json file directly (experimental)"
 )
-def install_claude(project: str, bearer: str, write_file: bool):
+def install_claude(project: str, write_file: bool):
     """
     Generate Claude Code MCP configuration.
 
@@ -37,6 +36,8 @@ def install_claude(project: str, bearer: str, write_file: bool):
 
     Default mode: Prints 'claude mcp add' commands to run.
     --write-file mode: Writes <project>/.mcp.json directly (experimental, schema may be outdated).
+
+    Note: Bearer tokens are never printed. Use $JWT environment variable.
     """
     enabled = get_enabled_servers()
 
@@ -51,44 +52,36 @@ def install_claude(project: str, bearer: str, write_file: bool):
     gateway_url = os.getenv("ATTACH_GATEWAY_URL", "http://localhost:8080")
 
     if write_file:
-        _write_mcp_json_file(project, enabled, gateway_url, bearer)
+        _write_mcp_json_file(project, enabled, gateway_url)
     else:
-        _print_claude_commands(enabled, gateway_url, bearer)
+        _print_claude_commands(enabled, gateway_url)
 
 
-def _print_claude_commands(servers: dict, gateway_url: str, bearer: str):
-    """Print 'claude mcp add' commands for each server."""
-    click.echo("Run the following commands to add MCP servers to Claude Code:\n")
+def _print_claude_commands(servers: dict, gateway_url: str):
+    """Print 'claude mcp add' commands for each server (positional args form)."""
+    click.echo("# Set your JWT token in the environment first:")
+    click.echo("# export JWT=<your-bearer-token>")
+    click.echo()
+    click.echo("# Run these commands to add MCP servers to Claude Code:\n")
 
     for server_name in servers.keys():
         server_url = f"{gateway_url}/mcp/{server_name}"
 
-        if bearer:
-            # Check if Claude Code supports headers in HTTP transport
-            click.echo(f"# Note: If Claude Code HTTP transport supports headers:")
-            click.echo(
-                f'claude mcp add --transport http --name "{server_name}" --url "{server_url}" --header "Authorization: Bearer {bearer}"'
-            )
-            click.echo()
-            click.echo(
-                f"# If headers are not supported, you'll need to configure auth separately or use a different approach."
-            )
-        else:
-            click.echo(
-                f'claude mcp add --transport http --name "{server_name}" --url "{server_url}"'
-            )
-
+        # Use positional args (most common CLI pattern)
+        click.echo(f"claude mcp add --transport http {server_name} {server_url}")
         click.echo()
 
-    if not bearer:
-        click.echo(
-            "Tip: Pass --bearer <token> to include Authorization header in commands (if supported by Claude)."
-        )
+    click.echo("# If Claude Code HTTP transport supports authorization headers:")
+    click.echo(
+        '# claude mcp add --transport http <name> <url> --header "Authorization: Bearer $JWT"'
+    )
+    click.echo()
+    click.echo(
+        "# Note: JWT is passed via environment variable to avoid exposing tokens in shell history."
+    )
 
 
-def _write_mcp_json_file(
-    project_dir: str, servers: dict, gateway_url: str, bearer: str
-):
+def _write_mcp_json_file(project_dir: str, servers: dict, gateway_url: str):
     """
     Write .mcp.json file for Claude Code (experimental).
 
@@ -114,14 +107,6 @@ def _write_mcp_json_file(
             "url": server_url,
         }
 
-        if bearer:
-            # This may not be the correct schema - Claude Code's HTTP transport may not support headers
-            server_config["headers"] = {"Authorization": f"Bearer {bearer}"}
-            click.echo(
-                f"Warning: Added Authorization header, but Claude Code HTTP transport may not support headers.",
-                err=True,
-            )
-
         mcp_config["mcpServers"][server_name] = server_config
 
     try:
@@ -135,6 +120,10 @@ def _write_mcp_json_file(
         )
         click.echo(
             "Prefer using 'claude mcp add' commands for guaranteed compatibility."
+        )
+        click.echo()
+        click.echo(
+            "Authorization headers are not included. Configure auth separately if needed."
         )
 
     except IOError as exc:

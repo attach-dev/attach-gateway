@@ -30,16 +30,21 @@ from typing import Any, Optional
 log = logging.getLogger(__name__)
 
 
+def _attach_dir_path() -> Path:
+    """Return ~/.attach directory path (does NOT create it)."""
+    return Path.home() / ".attach"
+
+
 def get_attach_dir() -> Path:
     """Return ~/.attach directory, creating if needed."""
-    attach_dir = Path.home() / ".attach"
+    attach_dir = _attach_dir_path()
     attach_dir.mkdir(exist_ok=True)
     return attach_dir
 
 
 def get_mcp_config_path() -> Path:
-    """Return path to MCP config file."""
-    return get_attach_dir() / "mcp.json"
+    """Return path to MCP config file (does NOT create ~/.attach)."""
+    return _attach_dir_path() / "mcp.json"
 
 
 def load_mcp_config() -> dict[str, Any]:
@@ -117,7 +122,10 @@ def is_mcp_enabled() -> bool:
     """
     Check if MCP gateway is enabled.
     Returns True if ATTACH_ENABLE_MCP=true OR if ~/.attach/mcp.json exists.
+
+    Note: This function does NOT create ~/.attach directory as a side effect.
     """
     if os.getenv("ATTACH_ENABLE_MCP", "").lower() == "true":
         return True
+    # Use get_mcp_config_path() which doesn't create the directory
     return get_mcp_config_path().exists()

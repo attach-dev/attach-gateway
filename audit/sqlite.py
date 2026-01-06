@@ -47,9 +47,12 @@ def get_db_path() -> Path:
 def init_db() -> None:
     """Initialize audit database schema."""
     db_path = get_db_path()
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=5.0)
     try:
         cursor = conn.cursor()
+
+        # Enable WAL mode for better concurrency
+        cursor.execute("PRAGMA journal_mode=WAL;")
 
         # MCP events table
         cursor.execute(
@@ -113,7 +116,7 @@ def insert_mcp_event(
     """Insert an MCP event into audit log."""
     db_path = get_db_path()
     try:
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(db_path, timeout=5.0)
         try:
             cursor = conn.cursor()
             cursor.execute(
@@ -150,7 +153,7 @@ def query_mcp_events(
         return []
 
     try:
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(db_path, timeout=5.0)
         conn.row_factory = sqlite3.Row
         try:
             cursor = conn.cursor()
@@ -201,7 +204,7 @@ def overview_stats() -> dict[str, Any]:
         }
 
     try:
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(db_path, timeout=5.0)
         conn.row_factory = sqlite3.Row
         try:
             cursor = conn.cursor()
@@ -276,7 +279,7 @@ def get_quota_count(user: str, tool: str, date_utc: str) -> int:
         return 0
 
     try:
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(db_path, timeout=5.0)
         try:
             cursor = conn.cursor()
             cursor.execute(
@@ -296,7 +299,7 @@ def increment_quota_count(user: str, tool: str, date_utc: str) -> None:
     """Increment quota counter for a user/tool/day."""
     db_path = get_db_path()
     try:
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(db_path, timeout=5.0)
         try:
             cursor = conn.cursor()
             cursor.execute(
@@ -313,3 +316,41 @@ def increment_quota_count(user: str, tool: str, date_utc: str) -> None:
             conn.close()
     except sqlite3.Error as exc:
         log.error("Failed to increment quota count: %s", exc)
+
+
+def atomic_increment_and_get_quota_count(user: str, tool: str, date_utc: str) -> int:
+    """
+    Atomically increment quota counter and return the NEW count.
+
+    This prevents TOCTOU race conditions by incrementing first, then returning
+    the new count so the caller can check if the limit was exceeded.
+
+    Returns:
+        The count AFTER increment (1-based). Returns 0 on error.
+    """
+    db_path = get_db_path()
+    try:
+        conn = sqlite3.connect(db_path, timeout=5.0)
+        try:
+            cursor = conn.cursor()
+            # Use RETURNING clause to atomically increment and get new value
+            # SQLite 3.35+ supports RETURNING
+            cursor.execute(
+                """
+                INSERT INTO mcp_counters (date_utc, user, tool, count)
+                VALUES (?, ?, ?, 1)
+                ON CONFLICT(date_utc, user, tool)
+                DO UPDATE SET count = count + 1
+                RETURNING count
+                """,
+                (date_utc, user, tool),
+            )
+            row = cursor.fetchone()
+            conn.commit()
+            return row[0] if row else 1
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        log.error("Failed to atomic increment quota count: %s", exc)
+        # On error, return 0 (allow the request - fail open)
+        return 0
