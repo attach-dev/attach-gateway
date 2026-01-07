@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import click
 
-from mcp.config import (
+from attach.mcp.config import (
     get_mcp_config_path,
     load_mcp_config,
     save_mcp_config,

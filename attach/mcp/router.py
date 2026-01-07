@@ -14,8 +14,8 @@ from typing import Any
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from mcp.config import get_enabled_servers
-from mcp.proxy import proxy_mcp_request
+from attach.mcp.config import get_enabled_servers
+from attach.mcp.proxy import proxy_mcp_request
 
 log = logging.getLogger(__name__)
 

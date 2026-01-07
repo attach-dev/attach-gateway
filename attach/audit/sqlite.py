@@ -34,7 +34,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from mcp.config import get_attach_dir
+from attach.mcp.config import get_attach_dir
 
 log = logging.getLogger(__name__)
 

@@ -53,16 +53,16 @@ def temp_attach_dir(monkeypatch, tmp_path):
     attach_dir = tmp_path / "attach"
     attach_dir.mkdir()
 
-    import audit.sqlite
-    import mcp.config
-    import mcp.quota
+    import attach.audit.sqlite
+    import attach.mcp.config
+    import attach.mcp.quota
 
     # Patch _attach_dir_path for is_mcp_enabled() and get_mcp_config_path()
-    monkeypatch.setattr(mcp.config, "_attach_dir_path", lambda: attach_dir)
+    monkeypatch.setattr(attach.mcp.config, "_attach_dir_path", lambda: attach_dir)
     # Also patch get_attach_dir for backward compatibility
-    monkeypatch.setattr(mcp.config, "get_attach_dir", lambda: attach_dir)
-    monkeypatch.setattr(mcp.quota, "get_attach_dir", lambda: attach_dir)
-    monkeypatch.setattr(audit.sqlite, "get_attach_dir", lambda: attach_dir)
+    monkeypatch.setattr(attach.mcp.config, "get_attach_dir", lambda: attach_dir)
+    monkeypatch.setattr(attach.mcp.quota, "get_attach_dir", lambda: attach_dir)
+    monkeypatch.setattr(attach.audit.sqlite, "get_attach_dir", lambda: attach_dir)
 
     return attach_dir
 
@@ -98,7 +98,7 @@ async def test_mcp_proxy_forwards_request(temp_attach_dir, fake_mcp_server):
     (temp_attach_dir / "mcp.json").write_text(json.dumps(mcp_config))
 
     # Initialize audit DB
-    from audit.sqlite import init_db
+    from attach.audit.sqlite import init_db
 
     init_db()
 
@@ -108,9 +108,9 @@ async def test_mcp_proxy_forwards_request(temp_attach_dir, fake_mcp_server):
     # Mock the httpx client to return fake upstream response
     from unittest.mock import Mock
 
-    import mcp.proxy
+    import attach.mcp.proxy
 
-    original_client = mcp.proxy.httpx.AsyncClient
+    original_client = attach.mcp.proxy.httpx.AsyncClient
 
     class MockAsyncClient:
         def __init__(self, *args, **kwargs):
@@ -134,9 +134,7 @@ async def test_mcp_proxy_forwards_request(temp_attach_dir, fake_mcp_server):
             }
             return mock_response
 
-    import mcp.proxy
-
-    mcp.proxy.httpx.AsyncClient = MockAsyncClient
+    attach.mcp.proxy.httpx.AsyncClient = MockAsyncClient
 
     try:
         async with AsyncClient(
@@ -153,7 +151,7 @@ async def test_mcp_proxy_forwards_request(temp_attach_dir, fake_mcp_server):
             data = response.json()
             assert data["result"]["status"] == "ok"
     finally:
-        mcp.proxy.httpx.AsyncClient = original_client
+        attach.mcp.proxy.httpx.AsyncClient = original_client
 
 
 @pytest.mark.asyncio
@@ -177,7 +175,7 @@ async def test_mcp_quota_enforcement(temp_attach_dir):
     (temp_attach_dir / "mcp_policy.json").write_text(json.dumps(policy_config))
 
     # Initialize audit DB
-    from audit.sqlite import init_db
+    from attach.audit.sqlite import init_db
 
     init_db()
 
@@ -187,7 +185,7 @@ async def test_mcp_quota_enforcement(temp_attach_dir):
     # Mock httpx client
     from unittest.mock import Mock
 
-    import mcp.proxy
+    import attach.mcp.proxy
 
     class MockAsyncClient:
         def __init__(self, *args, **kwargs):
@@ -211,8 +209,8 @@ async def test_mcp_quota_enforcement(temp_attach_dir):
             }
             return mock_response
 
-    original_client = mcp.proxy.httpx.AsyncClient
-    mcp.proxy.httpx.AsyncClient = MockAsyncClient
+    original_client = attach.mcp.proxy.httpx.AsyncClient
+    attach.mcp.proxy.httpx.AsyncClient = MockAsyncClient
 
     try:
         async with AsyncClient(
@@ -251,7 +249,7 @@ async def test_mcp_quota_enforcement(temp_attach_dir):
             assert "error" in data2
             assert data2["error"]["code"] == -32029  # quota exceeded code
     finally:
-        mcp.proxy.httpx.AsyncClient = original_client
+        attach.mcp.proxy.httpx.AsyncClient = original_client
 
 
 @pytest.mark.asyncio
@@ -262,7 +260,7 @@ async def test_mcp_server_not_found(temp_attach_dir):
     (temp_attach_dir / "mcp.json").write_text(json.dumps(mcp_config))
 
     # Initialize audit DB
-    from audit.sqlite import init_db
+    from attach.audit.sqlite import init_db
 
     init_db()
 

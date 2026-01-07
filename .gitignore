@@ -23,5 +23,4 @@ venv/
 .venv/
 __pyo3*.so
 *.egg-info/
-CLAUDE.md
 .claude/

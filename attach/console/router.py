@@ -22,8 +22,8 @@ from typing import Optional
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse
 
-from audit.sqlite import overview_stats, query_mcp_events
-from mcp.config import get_enabled_servers
+from attach.audit.sqlite import overview_stats, query_mcp_events
+from attach.mcp.config import get_enabled_servers
 
 log = logging.getLogger(__name__)
 

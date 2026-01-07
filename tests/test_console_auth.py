@@ -53,18 +53,18 @@ def temp_attach_dir(monkeypatch, tmp_path):
     attach_dir = tmp_path / "attach"
     attach_dir.mkdir()
 
-    import audit.sqlite
-    import mcp.config
+    import attach.audit.sqlite
+    import attach.mcp.config
 
-    monkeypatch.setattr(mcp.config, "get_attach_dir", lambda: attach_dir)
-    monkeypatch.setattr(audit.sqlite, "get_attach_dir", lambda: attach_dir)
+    monkeypatch.setattr(attach.mcp.config, "get_attach_dir", lambda: attach_dir)
+    monkeypatch.setattr(attach.audit.sqlite, "get_attach_dir", lambda: attach_dir)
 
     # Create mcp.json to enable MCP
     mcp_config = {"version": 1, "servers": {}}
     (attach_dir / "mcp.json").write_text(json.dumps(mcp_config))
 
     # Initialize audit DB
-    from audit.sqlite import init_db
+    from attach.audit.sqlite import init_db
 
     init_db()
 

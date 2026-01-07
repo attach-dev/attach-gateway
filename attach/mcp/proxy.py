@@ -13,9 +13,9 @@ from typing import Any, Optional
 
 import httpx
 
-from audit.sqlite import insert_mcp_event
-from mcp.config import get_enabled_servers, get_server_headers
-from mcp.quota import check_quota, record_tool_call
+from attach.audit.sqlite import insert_mcp_event
+from attach.mcp.config import get_enabled_servers, get_server_headers
+from attach.mcp.quota import check_quota, record_tool_call
 
 log = logging.getLogger(__name__)
 

@@ -118,7 +118,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize MCP audit DB if MCP is enabled
     if getattr(app.state, "mcp_enabled", False):
-        from audit.sqlite import init_db
+        from attach.audit.sqlite import init_db
 
         init_db()
 
@@ -194,14 +194,14 @@ def create_app(config: Optional[AttachConfig] = None) -> FastAPI:
     app.include_router(mem_router)
 
     # Conditionally mount MCP and console routers (opt-in)
-    from mcp.config import is_mcp_enabled
+    from attach.mcp.config import is_mcp_enabled
 
     mcp_enabled = is_mcp_enabled()
     app.state.mcp_enabled = mcp_enabled
 
     if mcp_enabled:
-        from console.router import router as console_router
-        from mcp.router import router as mcp_router
+        from attach.console.router import router as console_router
+        from attach.mcp.router import router as mcp_router
 
         app.include_router(mcp_router)
         app.include_router(console_router)

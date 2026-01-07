@@ -12,7 +12,7 @@ from pathlib import Path
 
 import click
 
-from mcp.config import get_enabled_servers
+from attach.mcp.config import get_enabled_servers
 
 
 @click.group(name="claude")

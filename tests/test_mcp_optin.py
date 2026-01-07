@@ -53,10 +53,10 @@ def temp_attach_dir(monkeypatch, tmp_path):
     attach_dir = tmp_path / "attach"
     attach_dir.mkdir()
 
-    import mcp.config
+    import attach.mcp.config
 
     # Patch _attach_dir_path so both get_attach_dir and get_mcp_config_path use temp dir
-    monkeypatch.setattr(mcp.config, "_attach_dir_path", lambda: attach_dir)
+    monkeypatch.setattr(attach.mcp.config, "_attach_dir_path", lambda: attach_dir)
 
     # Disable Weaviate to avoid connection errors during tests
     monkeypatch.setenv("MEM_BACKEND", "none")

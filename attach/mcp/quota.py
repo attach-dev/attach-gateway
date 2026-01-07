@@ -30,8 +30,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from audit.sqlite import atomic_increment_and_get_quota_count, increment_quota_count
-from mcp.config import get_attach_dir
+from attach.audit.sqlite import atomic_increment_and_get_quota_count, increment_quota_count
+from attach.mcp.config import get_attach_dir
 
 log = logging.getLogger(__name__)
 
