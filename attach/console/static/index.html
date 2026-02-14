@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attach Gateway - MCP Console</title>
+    <link rel="stylesheet" href="/console/static/style.css">
+</head>
+<body>
+    <header>
+        <h1>Attach Gateway - MCP Console</h1>
+        <div id="auth-status"></div>
+    </header>
+
+    <main id="app">
+        <div id="login-prompt" style="display: none;">
+            <h2>Authentication Required</h2>
+            <p>Please paste your Bearer token to access the console.</p>
+            <textarea id="token-input" placeholder="Paste your JWT token here..." rows="4"></textarea>
+            <button id="save-token-btn">Save Token</button>
+        </div>
+
+        <div id="dashboard" style="display: none;">
+            <nav>
+                <button class="nav-btn active" data-view="overview">Overview</button>
+                <button class="nav-btn" data-view="events">Events</button>
+                <button class="nav-btn" data-view="servers">Servers</button>
+                <button id="logout-btn">Logout</button>
+            </nav>
+
+            <div id="overview-view" class="view">
+                <h2>Overview</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Calls Today</h3>
+                        <div class="stat-value" id="calls-today">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Denies Today</h3>
+                        <div class="stat-value" id="denies-today">-</div>
+                    </div>
+                </div>
+
+                <div class="stats-row">
+                    <div class="stat-section">
+                        <h3>Top Tools</h3>
+                        <ul id="top-tools"></ul>
+                    </div>
+                    <div class="stat-section">
+                        <h3>Top Users</h3>
+                        <ul id="top-users"></ul>
+                    </div>
+                </div>
+            </div>
+
+            <div id="events-view" class="view" style="display: none;">
+                <h2>Recent Events</h2>
+                <div class="filters">
+                    <label>Limit: <input type="number" id="events-limit" value="200" min="10" max="1000"></label>
+                    <button id="refresh-events-btn">Refresh</button>
+                </div>
+                <div id="events-table-container">
+                    <table id="events-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>User</th>
+                                <th>Server</th>
+                                <th>Method</th>
+                                <th>Tool</th>
+                                <th>Allowed</th>
+                                <th>Latency (ms)</th>
+                                <th>Error</th>
+                            </tr>
+                        </thead>
+                        <tbody id="events-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="servers-view" class="view" style="display: none;">
+                <h2>MCP Servers</h2>
+                <div id="servers-list"></div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/console/static/app.js"></script>
+</body>
+</html>

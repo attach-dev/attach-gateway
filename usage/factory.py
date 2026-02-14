@@ -2,9 +2,9 @@ from __future__ import annotations
 
 """Factory for usage backends."""
 
+import logging
 import os
 import warnings
-import logging
 
 from .backends import (
     AbstractUsageBackend,
@@ -41,17 +41,19 @@ def get_usage_backend(kind: str) -> AbstractUsageBackend:
                 "Prometheus metering unavailable: %s – "
                 "falling back to NullUsageBackend. "
                 "Install with: pip install 'attach-dev[usage]'",
-                exc
+                exc,
             )
             return NullUsageBackend()
 
     if kind == "openmeter":
-        # fail-fast on bad config
+        # Graceful fallback if API key is missing
         if not os.getenv("OPENMETER_API_KEY"):
-            raise RuntimeError(
-                "USAGE_METERING=openmeter requires OPENMETER_API_KEY. "
-                "Set the variable or change USAGE_METERING=null to disable."
+            log.warning(
+                "USAGE_METERING=openmeter but OPENMETER_API_KEY not set. "
+                "Falling back to NullUsageBackend. "
+                "Set OPENMETER_API_KEY to enable OpenMeter metering."
             )
+            return NullUsageBackend()
         return OpenMeterBackend()  # exceptions inside bubble up
 
     return NullUsageBackend()

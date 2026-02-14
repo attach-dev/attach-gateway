@@ -1,8 +1,9 @@
 # examples/agents/planner.py
+import os
+
+import httpx
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import httpx
-import os
 
 app = FastAPI(title="Planner Agent")
 

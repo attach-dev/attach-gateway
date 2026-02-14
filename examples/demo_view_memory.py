@@ -24,7 +24,9 @@ print()
 
 # Fetch the last 10 events, newest first
 result = (
-    client.query.get("MemoryEvent", ["timestamp", "event", "user"])  # Fields that actually exist
+    client.query.get(
+        "MemoryEvent", ["timestamp", "event", "user"]
+    )  # Fields that actually exist
     .with_additional(["id"])
     .with_limit(10)
     .do()

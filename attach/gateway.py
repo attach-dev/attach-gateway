@@ -9,12 +9,13 @@ from typing import Optional
 import weaviate
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
+from starlette.middleware.base import BaseHTTPMiddleware
 
+import logs
 from a2a.routes import router as a2a_router
 from auth.oidc import _require_env
-import logs
+
 logs_router = logs.router
 from mem import get_memory_backend
 from middleware.auth import jwt_auth_mw
@@ -27,6 +28,7 @@ from utils.env import int_env
 # Guard TokenQuotaMiddleware import (matches main.py pattern)
 try:
     from middleware.quota import TokenQuotaMiddleware
+
     QUOTA_AVAILABLE = True
 except ImportError:  # optional extra not installed
     QUOTA_AVAILABLE = False
@@ -113,11 +115,17 @@ async def lifespan(app: FastAPI):
     backend_selector = _select_backend()
     app.state.usage = get_usage_backend(backend_selector)
     mount_metrics(app)
-    
+
+    # Initialize MCP audit DB if MCP is enabled
+    if getattr(app.state, "mcp_enabled", False):
+        from attach.audit.sqlite import init_db
+
+        init_db()
+
     yield
-    
+
     # Shutdown
-    if hasattr(app.state.usage, 'aclose'):
+    if hasattr(app.state.usage, "aclose"):
         await app.state.usage.aclose()
 
 
@@ -170,7 +178,7 @@ def create_app(config: Optional[AttachConfig] = None) -> FastAPI:
         allow_headers=["*"],
         allow_credentials=True,
     )
-    
+
     # Only add quota middleware if available and explicitly configured
     limit = int_env("MAX_TOKENS_PER_MIN", 60000)
     if QUOTA_AVAILABLE and limit is not None:
@@ -184,6 +192,19 @@ def create_app(config: Optional[AttachConfig] = None) -> FastAPI:
     app.include_router(proxy_router)
     app.include_router(logs_router)
     app.include_router(mem_router)
+
+    # Conditionally mount MCP and console routers (opt-in)
+    from attach.mcp.config import is_mcp_enabled
+
+    mcp_enabled = is_mcp_enabled()
+    app.state.mcp_enabled = mcp_enabled
+
+    if mcp_enabled:
+        from attach.console.router import router as console_router
+        from attach.mcp.router import router as mcp_router
+
+        app.include_router(mcp_router)
+        app.include_router(console_router)
 
     # Setup memory backend
     memory_backend = get_memory_backend(config.mem_backend, config)

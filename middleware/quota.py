@@ -165,6 +165,7 @@ def _is_textual(mime: str) -> bool:
 # Token-count helpers
 # ---------------------------------------------------------------------------
 
+
 def _encoder_for_model(model: str):
     """Return a tiktoken encoder, falling back to byte count."""
     if tiktoken is None:  # fallback: 1 token ≈ 4 bytes

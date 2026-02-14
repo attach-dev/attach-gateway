@@ -4,6 +4,7 @@ Stateless JWT authentication middleware.
 This file *must* live inside the project's `middleware/` package so that
 `from middleware.auth import jwt_auth_mw` works.
 """
+
 from __future__ import annotations
 
 import os
@@ -11,7 +12,10 @@ import os
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from auth.oidc import verify_jwt, verify_jwt_with_exchange  # your existing verifier (RS256 / ES256 only)
+from auth.oidc import (  # your existing verifier (RS256 / ES256 only)
+    verify_jwt,
+    verify_jwt_with_exchange,
+)
 
 _CLOCK_SKEW = 60  # seconds
 
@@ -22,6 +26,11 @@ EXCLUDED_PATHS = {
     "/redoc",
     "/openapi.json",
 }
+
+# Path prefixes that don't require authentication (for console static assets)
+EXCLUDED_PATH_PREFIXES = [
+    "/console/static/",
+]
 
 
 async def jwt_auth_mw(request: Request, call_next):
@@ -35,10 +44,20 @@ async def jwt_auth_mw(request: Request, call_next):
     # Skip authentication for OPTIONS requests (CORS preflight)
     if request.method == "OPTIONS":
         return await call_next(request)
-    
+
     # Skip authentication for excluded paths
     if request.url.path in EXCLUDED_PATHS:
         return await call_next(request)
+
+    # Skip authentication for console (unauthenticated landing page)
+    # Note: Check both with and without trailing slash to handle URL variations
+    if request.url.path in ("/console", "/console/"):
+        return await call_next(request)
+
+    # Skip authentication for excluded path prefixes (console static assets)
+    for prefix in EXCLUDED_PATH_PREFIXES:
+        if request.url.path.startswith(prefix):
+            return await call_next(request)
 
     auth_header = request.headers.get("authorization", "")
     if not auth_header.startswith("Bearer "):
@@ -49,7 +68,7 @@ async def jwt_auth_mw(request: Request, call_next):
     try:
         # Use sync version unless Descope exchange is explicitly enabled
         if os.getenv("ENABLE_DESCOPE_EXCHANGE", "false").lower() == "true":
-            claims = await verify_jwt_with_exchange(token, leeway=_CLOCK_SKEW) 
+            claims = await verify_jwt_with_exchange(token, leeway=_CLOCK_SKEW)
         else:
             claims = verify_jwt(token, leeway=_CLOCK_SKEW)  # original sync version
     except Exception as exc:

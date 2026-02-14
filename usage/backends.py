@@ -95,19 +95,18 @@ class OpenMeterBackend:
 
         self.api_key = api_key
         self.base_url = os.getenv("OPENMETER_URL", "https://openmeter.cloud")
-        
+
         # Use httpx instead of buggy OpenMeter SDK
         try:
             import httpx
-            self.client = httpx.AsyncClient(
-                timeout=30.0
-            )
+
+            self.client = httpx.AsyncClient(timeout=30.0)
         except ImportError as exc:
             raise ImportError("httpx is required for OpenMeter") from exc
 
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""
-        if hasattr(self.client, 'aclose'):
+        if hasattr(self.client, "aclose"):
             await self.client.aclose()
 
     async def record(self, **evt) -> None:
@@ -116,45 +115,53 @@ class OpenMeterBackend:
         except ImportError as exc:
             return
 
-        base_time = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        base_time = (
+            datetime.now(timezone.utc)
+            .isoformat(timespec="milliseconds")
+            .replace("+00:00", "Z")
+        )
         user = evt.get("user")
         model = evt.get("model")
-        
+
         tokens_in = int(evt.get("tokens_in", 0) or 0)
         tokens_out = int(evt.get("tokens_out", 0) or 0)
 
         # Send separate events for input and output tokens
         events_to_send = []
-        
+
         if tokens_in > 0:
-            events_to_send.append({
-                "specversion": "1.0",
-                "type": "prompt",        # ← Changed from "tokens" to "prompt"
-                "id": str(uuid4()),
-                "time": base_time,
-                "source": "attach-gateway",
-                "subject": user,
-                "data": {
-                    "tokens": tokens_in,
-                    "model": model,
-                    "type": "input"      # ← This stays the same
+            events_to_send.append(
+                {
+                    "specversion": "1.0",
+                    "type": "prompt",  # ← Changed from "tokens" to "prompt"
+                    "id": str(uuid4()),
+                    "time": base_time,
+                    "source": "attach-gateway",
+                    "subject": user,
+                    "data": {
+                        "tokens": tokens_in,
+                        "model": model,
+                        "type": "input",  # ← This stays the same
+                    },
                 }
-            })
-        
+            )
+
         if tokens_out > 0:
-            events_to_send.append({
-                "specversion": "1.0", 
-                "type": "prompt",
-                "id": str(uuid4()),
-                "time": base_time,
-                "source": "attach-gateway",
-                "subject": user,
-                "data": {
-                    "tokens": tokens_out,   # ← Single tokens field
-                    "model": model,
-                    "type": "output"        # ← Add type field
+            events_to_send.append(
+                {
+                    "specversion": "1.0",
+                    "type": "prompt",
+                    "id": str(uuid4()),
+                    "time": base_time,
+                    "source": "attach-gateway",
+                    "subject": user,
+                    "data": {
+                        "tokens": tokens_out,  # ← Single tokens field
+                        "model": model,
+                        "type": "output",  # ← Add type field
+                    },
                 }
-            })
+            )
 
         # Send each event
         for event in events_to_send:
@@ -164,12 +171,12 @@ class OpenMeterBackend:
                     json=event,
                     headers={
                         "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/cloudevents+json"
-                    }
+                        "Content-Type": "application/cloudevents+json",
+                    },
                 )
-                
+
                 if response.status_code not in [200, 201, 202, 204]:
                     logger.warning(f"OpenMeter error: {response.status_code}")
-                    
+
             except Exception as exc:
                 logger.warning("OpenMeter request failed: %s", exc)
